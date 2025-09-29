@@ -2,9 +2,9 @@
 
 import { useState } from "react"
 import useSWR from "swr"
-import { PortfolioStats } from "@/components/portfolio-stats"
-import { PositionList } from "@/components/position-list"
-import { VolatilityChart } from "@/components/volatility-chart"
+import { PortfolioStats } from "../components/portfolio-stats"
+import { PositionList } from "../components/position-list"
+import { VolatilityChart } from "../components/volatility-chart"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { RefreshCw, Github, ExternalLink } from "lucide-react"
@@ -51,7 +51,7 @@ export default function DashboardPage() {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center space-y-4">
           <RefreshCw className="h-8 w-8 animate-spin mx-auto text-primary" />
-          <p className="text-muted-foreground">Loading portfolio data...</p>
+          <p className="text-sm text-muted-foreground">Loading portfolio data...</p>
         </div>
       </div>
     )
