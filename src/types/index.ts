@@ -1,0 +1,61 @@
+import type { PublicKey } from "@solana/web3.js"
+import type BN from "bn.js"
+
+export interface PoolConfig {
+  address: PublicKey
+  tokenX: string
+  tokenY: string
+  feeTier: number
+  binStep: number
+}
+
+export interface Position {
+  positionId: string
+  poolAddress: string
+  lowerBin: number
+  upperBin: number
+  liquidityX: BN
+  liquidityY: BN
+  feesEarned: {
+    tokenX: BN
+    tokenY: BN
+  }
+  currentPrice: number
+  isInRange: boolean
+}
+
+export interface VolatilityData {
+  stdDev: number
+  mean: number
+  recentPrices: number[]
+  timestamp: number
+}
+
+export interface RebalanceAction {
+  positionId: string
+  poolAddress: string
+  action: "rebalance" | "stop-loss" | "none"
+  reason: string
+  oldRange: { lower: number; upper: number }
+  newRange?: { lower: number; upper: number }
+  timestamp: number
+}
+
+export interface PortfolioStats {
+  totalPositions: number
+  totalValueUSD: number
+  totalFeesEarned: number
+  positionsInRange: number
+  positionsOutOfRange: number
+  averageAPY: number
+  impermanentLoss: number
+}
+
+export interface SimulationResult {
+  strategy: string
+  totalFees: number
+  impermanentLoss: number
+  netReturn: number
+  rebalanceCount: number
+  gasSpent: number
+}
