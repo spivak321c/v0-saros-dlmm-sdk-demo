@@ -58,10 +58,21 @@ export default function DashboardPage() {
   }
 
   const positions = positionsData.positions || []
-  const totalValue = positions.reduce((sum: number, p: any) => sum + p.valueUSD, 0)
-  const totalFees = positions.reduce((sum: number, p: any) => sum + p.feesEarnedX * 100 + p.feesEarnedY, 0)
-  const averageAPY = positions.reduce((sum: number, p: any) => sum + p.apy, 0) / positions.length || 0
+  const totalValue = positions.reduce((sum: number, p: any) => sum + (p.valueUSD || 0), 0)
+  const totalFees = positions.reduce(
+    (sum: number, p: any) => sum + (p.feesEarnedX || 0) * 100 + (p.feesEarnedY || 0),
+    0,
+  )
+  const averageAPY =
+    positions.length > 0 ? positions.reduce((sum: number, p: any) => sum + (p.apy || 0), 0) / positions.length : 0
   const positionsInRange = positions.filter((p: any) => p.isInRange).length
+
+  const mean = volatilityData?.mean ?? 0
+  const stdDev = volatilityData?.stdDev ?? 0
+  const volatilityRatio = volatilityData?.volatilityRatio ?? 0
+  const recommendedRangeWidth = volatilityData?.recommendedRangeWidth ?? 0
+  const isHighVolatility = volatilityData?.isHighVolatility ?? false
+  const historicalPrices = volatilityData?.historicalPrices ?? []
 
   return (
     <div className="min-h-screen bg-background">
@@ -130,7 +141,7 @@ export default function DashboardPage() {
 
         {/* Charts and Positions */}
         <div className="grid gap-8 lg:grid-cols-2">
-          <VolatilityChart data={volatilityData.historicalPrices} poolName="SOL/USDC" />
+          <VolatilityChart data={historicalPrices} poolName="SOL/USDC" />
 
           <Card>
             <CardHeader>
@@ -141,26 +152,26 @@ export default function DashboardPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Mean Price</p>
-                  <p className="text-2xl font-bold">${volatilityData.mean.toFixed(2)}</p>
+                  <p className="text-2xl font-bold">${mean.toFixed(2)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Std Deviation</p>
-                  <p className="text-2xl font-bold">{volatilityData.stdDev.toFixed(2)}</p>
+                  <p className="text-2xl font-bold">{stdDev.toFixed(2)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Volatility Ratio</p>
-                  <p className="text-2xl font-bold">{(volatilityData.volatilityRatio * 100).toFixed(2)}%</p>
+                  <p className="text-2xl font-bold">{(volatilityRatio * 100).toFixed(2)}%</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Recommended Range</p>
-                  <p className="text-2xl font-bold">{(volatilityData.recommendedRangeWidth * 100).toFixed(1)}%</p>
+                  <p className="text-2xl font-bold">{(recommendedRangeWidth * 100).toFixed(1)}%</p>
                 </div>
               </div>
 
               <div className="pt-4 border-t">
                 <p className="text-sm font-medium mb-2">Strategy Recommendation</p>
                 <p className="text-sm text-muted-foreground">
-                  {volatilityData.isHighVolatility
+                  {isHighVolatility
                     ? "High volatility detected. Using wider ranges to reduce rebalancing frequency and gas costs."
                     : "Low volatility environment. Tighter ranges recommended for maximum capital efficiency and fee generation."}
                 </p>
