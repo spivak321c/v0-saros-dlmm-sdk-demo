@@ -1,7 +1,22 @@
-"use client"
+"use client";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Line } from "react-chartjs-2"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Line,
+  LineChart,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -9,82 +24,109 @@ import {
   PointElement,
   LineElement,
   Title,
-  Tooltip,
-  Legend,
+  Tooltip as ChartTooltip,
+  Legend as ChartLegend,
   Filler,
-} from "chart.js"
+} from "chart.js";
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler)
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  ChartTooltip,
+  ChartLegend,
+  Filler
+);
 
 interface VolatilityChartProps {
-  data: {
-    timestamp: number
-    price: number
-  }[]
-  poolName: string
+  data: Array<{
+    timestamp: number;
+    price: number;
+  }>;
+  poolName: string;
 }
 
 export function VolatilityChart({ data, poolName }: VolatilityChartProps) {
-  const chartData = {
-    labels: data.map((d) => new Date(d.timestamp).toLocaleTimeString()),
-    datasets: [
-      {
-        label: "Price",
-        data: data.map((d) => d.price),
-        borderColor: "rgb(59, 130, 246)",
-        backgroundColor: "rgba(59, 130, 246, 0.1)",
-        fill: true,
-        tension: 0.4,
-      },
-    ],
-  }
+  // Format data for recharts
+  const chartData = data.map((point) => ({
+    time: new Date(point.timestamp).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+    price: point.price,
+  }));
 
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: false,
-      },
-      title: {
-        display: false,
-      },
-      tooltip: {
-        mode: "index" as const,
-        intersect: false,
-      },
-    },
-    scales: {
-      y: {
-        beginAtZero: false,
-        grid: {
-          color: "rgba(0, 0, 0, 0.05)",
-        },
-      },
-      x: {
-        grid: {
-          display: false,
-        },
-        ticks: {
-          maxRotation: 0,
-          autoSkip: true,
-          maxTicksLimit: 6,
-        },
-      },
-    },
-  }
+  // Calculate min and max for Y-axis domain
+  const prices = data.map((d) => d.price);
+  const minPrice = Math.min(...prices);
+  const maxPrice = Math.max(...prices);
+  const padding = (maxPrice - minPrice) * 0.1;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base sm:text-lg">Price Volatility</CardTitle>
-        <CardDescription className="text-xs sm:text-sm">{poolName} - Last 50 data points</CardDescription>
+        <CardTitle className="text-base sm:text-lg">
+          Price History - {poolName}
+        </CardTitle>
+        <CardDescription className="text-xs sm:text-sm">
+          Historical price data from bin activity
+        </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="h-[200px] sm:h-[300px]">
-          <Line data={chartData} options={options} />
+        <div className="h-[250px] sm:h-[300px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart
+              data={chartData}
+              margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis
+                dataKey="time"
+                tick={{ fontSize: 10 }}
+                className="text-muted-foreground"
+                tickLine={false}
+                axisLine={false}
+                interval="preserveStartEnd"
+              />
+              <YAxis
+                domain={[minPrice - padding, maxPrice + padding]}
+                tick={{ fontSize: 10 }}
+                className="text-muted-foreground"
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(value) => `$${value.toFixed(2)}`}
+                width={45}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--border))",
+                  borderRadius: "8px",
+                  fontSize: "12px",
+                }}
+                labelStyle={{ color: "hsl(var(--foreground))" }}
+                itemStyle={{ color: "hsl(var(--primary))" }}
+                formatter={(value: number) => [`$${value.toFixed(2)}`, "Price"]}
+              />
+              <Legend
+                wrapperStyle={{ fontSize: "11px" }}
+                iconType="line"
+                formatter={() => "Price"}
+              />
+              <Line
+                type="monotone"
+                dataKey="price"
+                stroke="hsl(var(--primary))"
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
         </div>
       </CardContent>
     </Card>
-  )
+  );
 }

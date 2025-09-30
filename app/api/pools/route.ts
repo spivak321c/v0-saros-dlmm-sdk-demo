@@ -1,0 +1,81 @@
+import { NextResponse } from "next/server";
+
+export async function GET() {
+  // Mock pool data - replace with actual Saros DLMM SDK calls
+  const pools = [
+    {
+      address: "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+      tokenX: "SOL",
+      tokenY: "USDC",
+      tvl: 2450000,
+      volume24h: 850000,
+      apy: 42.5,
+      fees24h: 12500,
+      binStep: 25,
+      activeId: 8388608,
+      priceChange24h: 3.2,
+    },
+    {
+      address: "8xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsV",
+      tokenX: "USDC",
+      tokenY: "USDT",
+      tvl: 1850000,
+      volume24h: 620000,
+      apy: 28.3,
+      fees24h: 8900,
+      binStep: 10,
+      activeId: 8388610,
+      priceChange24h: 0.1,
+    },
+    {
+      address: "9xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsW",
+      tokenX: "SOL",
+      tokenY: "mSOL",
+      tvl: 980000,
+      volume24h: 340000,
+      apy: 35.7,
+      fees24h: 5600,
+      binStep: 15,
+      activeId: 8388605,
+      priceChange24h: 2.8,
+    },
+    {
+      address: "10xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAs",
+      tokenX: "RAY",
+      tokenY: "USDC",
+      tvl: 1250000,
+      volume24h: 480000,
+      apy: 52.1,
+      fees24h: 9800,
+      binStep: 30,
+      activeId: 8388612,
+      priceChange24h: -1.5,
+    },
+    {
+      address: "11xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAt",
+      tokenX: "BONK",
+      tokenY: "SOL",
+      tvl: 720000,
+      volume24h: 290000,
+      apy: 68.4,
+      fees24h: 7200,
+      binStep: 50,
+      activeId: 8388600,
+      priceChange24h: 5.7,
+    },
+    {
+      address: "12xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAu",
+      tokenX: "JTO",
+      tokenY: "USDC",
+      tvl: 560000,
+      volume24h: 180000,
+      apy: 41.2,
+      fees24h: 4300,
+      binStep: 20,
+      activeId: 8388607,
+      priceChange24h: -2.3,
+    },
+  ];
+
+  return NextResponse.json({ pools });
+}
