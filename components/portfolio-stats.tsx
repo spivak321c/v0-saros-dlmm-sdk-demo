@@ -20,7 +20,11 @@ export function PortfolioStats({
   positionsInRange,
   totalPositions,
 }: PortfolioStatsProps) {
-  const netReturn = averageAPY - impermanentLoss
+  const safeAPY = Number(averageAPY) || 0
+  const safeIL = Number(impermanentLoss) || 0
+  const netReturn = safeAPY - safeIL
+  const safeTotalValue = Number(totalValue) || 0
+  const safeTotalFees = Number(totalFees) || 0
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -30,7 +34,7 @@ export function PortfolioStats({
           <DollarSign className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">${totalValue.toFixed(2)}</div>
+          <div className="text-2xl font-bold">${safeTotalValue.toFixed(2)}</div>
           <p className="text-xs text-muted-foreground">Across {totalPositions} positions</p>
         </CardContent>
       </Card>
@@ -41,8 +45,8 @@ export function PortfolioStats({
           <TrendingUp className="h-4 w-4 text-green-600" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold text-green-600">${totalFees.toFixed(2)}</div>
-          <p className="text-xs text-muted-foreground">Average APY: {averageAPY.toFixed(2)}%</p>
+          <div className="text-2xl font-bold text-green-600">${safeTotalFees.toFixed(2)}</div>
+          <p className="text-xs text-muted-foreground">Average APY: {safeAPY.toFixed(2)}%</p>
         </CardContent>
       </Card>
 

@@ -58,19 +58,21 @@ export default function DashboardPage() {
   }
 
   const positions = positionsData.positions || []
-  const totalValue = positions.reduce((sum: number, p: any) => sum + (p.valueUSD || 0), 0)
+  const totalValue = positions.reduce((sum: number, p: any) => sum + (Number(p.valueUSD) || 0), 0)
   const totalFees = positions.reduce(
-    (sum: number, p: any) => sum + (p.feesEarnedX || 0) * 100 + (p.feesEarnedY || 0),
+    (sum: number, p: any) => sum + (Number(p.feesEarnedX) || 0) * 100 + (Number(p.feesEarnedY) || 0),
     0,
   )
   const averageAPY =
-    positions.length > 0 ? positions.reduce((sum: number, p: any) => sum + (p.apy || 0), 0) / positions.length : 0
+    positions.length > 0
+      ? positions.reduce((sum: number, p: any) => sum + (Number(p.apy) || 0), 0) / positions.length
+      : 0
   const positionsInRange = positions.filter((p: any) => p.isInRange).length
 
-  const mean = volatilityData?.mean ?? 0
-  const stdDev = volatilityData?.stdDev ?? 0
-  const volatilityRatio = volatilityData?.volatilityRatio ?? 0
-  const recommendedRangeWidth = volatilityData?.recommendedRangeWidth ?? 0
+  const mean = Number(volatilityData?.mean) || 0
+  const stdDev = Number(volatilityData?.stdDev) || 0
+  const volatilityRatio = Number(volatilityData?.volatilityRatio) || 0
+  const recommendedRangeWidth = Number(volatilityData?.recommendedRangeWidth) || 0
   const isHighVolatility = volatilityData?.isHighVolatility ?? false
   const historicalPrices = volatilityData?.historicalPrices ?? []
 
