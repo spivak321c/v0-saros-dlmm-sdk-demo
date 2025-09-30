@@ -65,6 +65,11 @@ export function VolatilityChart({ data, poolName }: VolatilityChartProps) {
         grid: {
           display: false,
         },
+        ticks: {
+          maxRotation: 0,
+          autoSkip: true,
+          maxTicksLimit: 6,
+        },
       },
     },
   }
@@ -72,11 +77,11 @@ export function VolatilityChart({ data, poolName }: VolatilityChartProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Price Volatility</CardTitle>
-        <CardDescription>{poolName} - Last 50 data points</CardDescription>
+        <CardTitle className="text-base sm:text-lg">Price Volatility</CardTitle>
+        <CardDescription className="text-xs sm:text-sm">{poolName} - Last 50 data points</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="h-[300px]">
+        <div className="h-[200px] sm:h-[300px]">
           <Line data={chartData} options={options} />
         </div>
       </CardContent>
