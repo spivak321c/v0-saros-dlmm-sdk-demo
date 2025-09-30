@@ -29,7 +29,7 @@ An innovative, production-ready automated liquidity rebalancing tool for Saros D
 
 ## Architecture
 
-\`\`\`
+```
 saros-dlmm-rebalancer/
 ├── src/
 │   ├── rebalancer.ts          # Core rebalancing logic
@@ -58,7 +58,7 @@ saros-dlmm-rebalancer/
 │   └── volatility-chart.tsx
 └── scripts/
     └── setup-devnet.ts        # Devnet setup script
-\`\`\`
+```
 
 ## Technology Stack
 
@@ -80,21 +80,21 @@ saros-dlmm-rebalancer/
 ### Setup
 
 1. Clone the repository:
-\`\`\`bash
+```bash
 git clone https://github.com/yourusername/saros-dlmm-rebalancer.git
 cd saros-dlmm-rebalancer
-\`\`\`
+```
 
 2. Install dependencies:
-\`\`\`bash
+```bash
 npm install
-\`\`\`
+```
 
 3. Configure environment:
-\`\`\`bash
+```bash
 cp .env.example .env
 # Edit .env with your configuration
-\`\`\`
+```
 
 Required environment variables:
 - `SOLANA_RPC_URL` - Solana RPC endpoint (devnet or mainnet)
@@ -104,10 +104,10 @@ Required environment variables:
 - `MONITORED_POOLS` - Comma-separated DLMM pool addresses
 
 4. Setup Solana devnet wallet:
-\`\`\`bash
+```bash
 solana-keygen new --outfile ~/.config/solana/devnet.json
 solana airdrop 2 --url devnet
-\`\`\`
+```
 
 5. Create Telegram bot:
 - Message @BotFather on Telegram
@@ -118,9 +118,9 @@ solana airdrop 2 --url devnet
 
 ### Running the Rebalancer
 
-\`\`\`bash
+```bash
 npm run rebalancer
-\`\`\`
+```
 
 The rebalancer will:
 1. Load your DLMM positions from configured pools
@@ -131,9 +131,9 @@ The rebalancer will:
 
 ### Running the Telegram Bot
 
-\`\`\`bash
+```bash
 npm run bot
-\`\`\`
+```
 
 Available commands:
 - `/start` - Initialize bot
@@ -146,9 +146,9 @@ Available commands:
 
 ### Running the Analytics Dashboard
 
-\`\`\`bash
+```bash
 npm run dev
-\`\`\`
+```
 
 Visit `http://localhost:3000` to view:
 - Position overview with ranges
@@ -158,9 +158,9 @@ Visit `http://localhost:3000` to view:
 
 ### Running the Simulator
 
-\`\`\`bash
+```bash
 npm run simulator
-\`\`\`
+```
 
 Test strategies with:
 - Historical price data (mocked)
@@ -176,7 +176,7 @@ This project integrates the official [@saros-finance/dlmm-sdk](https://saros-doc
 
 #### Core Operations
 
-\`\`\`typescript
+```typescript
 import { DLMMPool, getUserPositions, addLiquidity, removeLiquidity, collectFees } from '@saros-finance/dlmm-sdk';
 
 // Load pool
@@ -205,11 +205,11 @@ await addLiquidity(connection, wallet, pool, {
   amountY: new BN(150000000),
   slippage: 0.01, // 1%
 });
-\`\`\`
+```
 
 #### Volatility-Adjusted Range Calculation
 
-\`\`\`typescript
+```typescript
 // Calculate standard deviation from recent bin prices
 const prices = binData.map(bin => bin.price);
 const mean = prices.reduce((a, b) => a + b) / prices.length;
@@ -227,11 +227,11 @@ const adjustedRangeWidth = baseRangeWidth * rangeMultiplier;
 
 const lowerBin = priceToBinId(currentPrice * (1 - adjustedRangeWidth), binStep);
 const upperBin = priceToBinId(currentPrice * (1 + adjustedRangeWidth), binStep);
-\`\`\`
+```
 
 #### Price Bin Calculations
 
-\`\`\`typescript
+```typescript
 // Convert bin ID to price
 function binIdToPrice(binId: number, binStep: number): number {
   return Math.pow(1 + binStep / 10000, binId);
@@ -241,7 +241,7 @@ function binIdToPrice(binId: number, binStep: number): number {
 function priceToBinId(price: number, binStep: number): number {
   return Math.floor(Math.log(price) / Math.log(1 + binStep / 10000));
 }
-\`\`\`
+```
 
 ### Implementation Notes
 
@@ -255,9 +255,9 @@ The `src/services/dlmm.service.ts` file contains production-ready SDK integratio
 ## Testing
 
 Run tests:
-\`\`\`bash
+```bash
 npm test
-\`\`\`
+```
 
 Test on devnet:
 1. Ensure devnet wallet has SOL
@@ -269,18 +269,18 @@ Test on devnet:
 
 ### Rebalancer Service (Heroku)
 
-\`\`\`bash
+```bash
 heroku create saros-rebalancer
 heroku config:set WALLET_PRIVATE_KEY=xxx TELEGRAM_BOT_TOKEN=xxx
 git push heroku main
 heroku ps:scale worker=1
-\`\`\`
+```
 
 ### Analytics Dashboard (Vercel)
 
-\`\`\`bash
+```bash
 vercel --prod
-\`\`\`
+```
 
 Or use the "Publish" button in v0 to deploy directly to Vercel.
 
