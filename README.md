@@ -1,337 +1,214 @@
-# Saros DLMM Automated Rebalancer
+# Saros DLMM Liquidity Provider Dashboard
 
-> **Hackathon Submission**: Saros Finance $100K Bounty Challenge
-
-An innovative, production-ready automated liquidity rebalancing tool for Saros DLMM pools with Telegram bot integration, portfolio analytics, and strategy simulation capabilities.
+A comprehensive dashboard for managing DLMM liquidity positions on Saros Finance with advanced features like position monitoring, performance analytics, automated rebalancing, and real-time updates.
 
 ## Features
 
-### Core Features
-- **Automated Rebalancing**: Monitors multiple DLMM pools and automatically rebalances positions when out of range
-- **Volatility-Adjusted Ranges**: Dynamically calculates optimal position ranges based on market volatility
-- **Telegram Bot**: Interactive bot for position management, alerts, and manual controls
-- **Portfolio Analytics**: Web dashboard showing position stats, fees, and performance metrics
-- **Strategy Simulator**: Backtest rebalancing strategies with historical data
-- **Stop-Loss Protection**: Automatic position closure when price breaches thresholds
+### Position Management
+- Real-time position monitoring
+- Automated fee collection
+- One-click position creation and removal
+- Multi-position portfolio tracking
 
-### Creative Innovations
-1. **Dynamic Volatility Analysis**: Uses bin price data to calculate real-time volatility and adjust ranges
-2. **Multi-Pool Monitoring**: Simultaneously tracks positions across multiple DLMM pools
-3. **Hybrid Yield Optimization**: Combines DLMM with staking for additional rewards
-4. **Risk Calculators**: Built-in IL and fee optimization calculations
-5. **Interactive Alerts**: Real-time Telegram notifications with actionable insights
+### Analytics & Insights
+- Portfolio performance charts
+- Fee earnings tracking
+- Daily yield calculations
+- Impermanent loss monitoring
 
-### Upcoming Features (AI-Driven)
-- ML-based volatility prediction using TensorFlow.js
-- AI-optimized rebalancing timing
-- Multi-user support with personalized strategies
-- Advanced backtesting with reinforcement learning
+### Automation
+- Auto-rebalancing based on volatility
+- Automated fee collection
+- Stop-loss protection
+- Customizable thresholds
 
-## Architecture
+### Real-time Updates
+- WebSocket integration for live data
+- Price updates
+- Position status changes
+- Alert notifications
+
+## Project Structure
 
 ```
-saros-dlmm-rebalancer/
-├── src/
-│   ├── rebalancer.ts          # Core rebalancing logic
-│   ├── bot.ts                 # Telegram bot interface
-│   ├── simulator.ts           # Strategy simulator
-│   ├── services/
-│   │   ├── dlmm.service.ts    # DLMM SDK integration
-│   │   ├── volatility.service.ts
-│   │   └── telegram.service.ts
-│   ├── utils/
-│   │   ├── wallet.ts
-│   │   ├── logger.ts
-│   │   └── calculations.ts
-│   ├── types/
-│   │   └── index.ts
-│   └── config/
-│       └── index.ts
-├── app/
-│   ├── page.tsx               # Analytics dashboard
-│   └── api/
-│       └── positions/
-│           └── route.ts       # API endpoints
-├── components/
-│   ├── portfolio-stats.tsx
-│   ├── position-list.tsx
-│   └── volatility-chart.tsx
-└── scripts/
-    └── setup-devnet.ts        # Devnet setup script
+.
+├── client/                 # Frontend React application
+│   ├── components/        # Reusable UI components
+│   ├── hooks/            # Custom React hooks
+│   ├── lib/              # Utilities and providers
+│   ├── pages/            # Page components
+│   └── src/              # Main app entry
+├── server/                # Backend Node.js server
+│   ├── services/         # Core business logic
+│   ├── solana/           # Solana/DLMM integration
+│   ├── routes.ts         # API endpoints
+│   └── index.ts          # Server entry
+└── shared/               # Shared types and schemas
+    └── schema.ts         # Zod validation schemas
 ```
 
-## Technology Stack
-
-- **Blockchain**: Solana (Devnet)
-- **SDK**: @saros-finance/dlmm-sdk, @saros-finance/sdk
-- **Backend**: Node.js, TypeScript
-- **Bot**: Telegraf
-- **Frontend**: Next.js 15, React 19, Chart.js
-- **Data Fetching**: SWR
-- **Styling**: Tailwind CSS v4
-
-## Installation
+## Getting Started
 
 ### Prerequisites
 - Node.js 18+
-- Solana CLI (for devnet setup)
-- Telegram account (for bot)
+- pnpm (recommended) or npm
+- Solana wallet (Phantom, Solflare, etc.)
 
-### Setup
+### Installation
 
-1. Clone the repository:
+1. Clone the repository
 ```bash
-git clone https://github.com/yourusername/saros-dlmm-rebalancer.git
-cd saros-dlmm-rebalancer
+git clone <repository-url>
+cd saros-dlmm-dashboard
 ```
 
-2. Install dependencies:
+2. Install dependencies
 ```bash
-npm install
+pnpm install
 ```
 
-3. Configure environment:
+3. Set up environment variables
 ```bash
+# Copy example env files
 cp .env.example .env
-# Edit .env with your configuration
+cp server/.env.example server/.env
+
+# Edit .env files with your configuration
 ```
 
-Required environment variables:
-- `SOLANA_RPC_URL` - Solana RPC endpoint (devnet or mainnet)
-- `WALLET_PRIVATE_KEY` - Base58 encoded private key
-- `TELEGRAM_BOT_TOKEN` - From @BotFather
-- `TELEGRAM_CHAT_ID` - Your Telegram chat ID
-- `MONITORED_POOLS` - Comma-separated DLMM pool addresses
-
-4. Setup Solana devnet wallet:
+4. Start the development server
 ```bash
-solana-keygen new --outfile ~/.config/solana/devnet.json
-solana airdrop 2 --url devnet
+# Terminal 1: Start backend server
+cd server
+pnpm dev
+
+# Terminal 2: Start frontend
+pnpm dev
 ```
 
-5. Create Telegram bot:
-- Message @BotFather on Telegram
-- Create new bot with `/newbot`
-- Copy token to `.env`
+5. Open your browser to `http://localhost:5173`
 
-## Usage
+## Environment Variables
 
-### Running the Rebalancer
-
-```bash
-npm run rebalancer
+### Frontend (.env)
+```
+VITE_API_URL=http://localhost:3001/api
+VITE_WS_URL=ws://localhost:8080
 ```
 
-The rebalancer will:
-1. Load your DLMM positions from configured pools
-2. Calculate volatility from recent bin data
-3. Check if positions are out of range
-4. Automatically rebalance with optimized ranges
-5. Send Telegram alerts for all actions
-
-### Running the Telegram Bot
-
-```bash
-npm run bot
+### Backend (server/.env)
+```
+RPC_ENDPOINT=https://api.mainnet-beta.solana.com
+PORT=3001
+WS_PORT=8080
+NODE_ENV=development
 ```
 
-Available commands:
-- `/start` - Initialize bot
-- `/monitor` - View current positions
-- `/rebalance` - Manually trigger rebalance
-- `/simulate` - Run strategy simulation
-- `/stats` - Portfolio statistics
-- `/volatility <pool>` - Check pool volatility
-- `/stop` - Stop monitoring
+## DLMM SDK Integration
 
-### Running the Analytics Dashboard
+The application uses the `@saros-finance/dlmm-sdk` for interacting with Saros DLMM pools. Key integration points:
 
-```bash
-npm run dev
-```
+### Server-side (`server/solana/dlmm-client.ts`)
+- Pool information fetching
+- Position management
+- Liquidity operations
+- Fee collection
 
-Visit `http://localhost:3000` to view:
-- Position overview with ranges
-- Fee earnings and APY
-- Volatility trends
-- Impermanent loss calculations
+### Client-side (`client/hooks/`)
+- Position data queries
+- Real-time updates via WebSocket
+- Transaction signing with wallet
 
-### Running the Simulator
+## API Endpoints
 
-```bash
-npm run simulator
-```
+### Positions
+- `GET /api/positions/:wallet` - Get all positions for a wallet
+- `GET /api/positions/detail/:address` - Get detailed position info
 
-Test strategies with:
-- Historical price data (mocked)
-- Different rebalancing frequencies
-- Various volatility thresholds
-- Fee vs. IL comparisons
+### Volatility
+- `GET /api/volatility/:poolAddress` - Get volatility data for a pool
 
-## SDK Integration
+### Rebalancing
+- `POST /api/rebalance` - Execute position rebalance
+- `GET /api/rebalance/history/:positionAddress?` - Get rebalance history
 
-### Saros DLMM SDK Usage
+### Stop Loss
+- `POST /api/stop-loss/set` - Configure stop-loss
+- `DELETE /api/stop-loss/:positionAddress` - Remove stop-loss
 
-This project integrates the official [@saros-finance/dlmm-sdk](https://saros-docs.rectorspace.com/docs/dlmm-sdk/overview) for all DLMM operations.
+### Alerts
+- `GET /api/alerts` - Get all alerts
+- `POST /api/alerts/:id/read` - Mark alert as read
 
-#### Core Operations
+## WebSocket Events
+
+The WebSocket server broadcasts real-time updates:
 
 ```typescript
-import { DLMMPool, getUserPositions, addLiquidity, removeLiquidity, collectFees } from '@saros-finance/dlmm-sdk';
+// Position updates
+{ type: 'position_update', data: PositionData }
 
-// Load pool
-const pool = await DLMMPool.load(connection, poolAddress);
-console.log(`Active bin: ${pool.activeId}`);
-console.log(`Current price: ${pool.getCurrentPrice()}`);
+// Price updates
+{ type: 'price_update', data: { poolAddress, price, timestamp } }
 
-// Get user positions
-const positions = await getUserPositions(connection, wallet.publicKey, pool);
+// Alerts
+{ type: 'alert', data: Alert }
 
-// Calculate volatility from bins
-const binData = await pool.getBinArray(startBin, endBin);
-const prices = binData.map(bin => bin.price);
-const volatility = calculateVolatility(prices);
-
-// Rebalance position
-await removeLiquidity(connection, wallet, pool, position, {
-  binIds: [8000, 8001, 8002, ...],
-  liquidityBps: 10000, // 100%
-});
-
-await addLiquidity(connection, wallet, pool, {
-  lowerBin: calculateLowerBin(volatility),
-  upperBin: calculateUpperBin(volatility),
-  amountX: new BN(1000000000),
-  amountY: new BN(150000000),
-  slippage: 0.01, // 1%
-});
+// Rebalance events
+{ type: 'rebalance_event', data: RebalanceEvent }
 ```
 
-#### Volatility-Adjusted Range Calculation
+## Development
 
-```typescript
-// Calculate standard deviation from recent bin prices
-const prices = binData.map(bin => bin.price);
-const mean = prices.reduce((a, b) => a + b) / prices.length;
-const variance = prices.reduce((sum, price) => 
-  sum + Math.pow(price - mean, 2), 0) / prices.length;
-const stdDev = Math.sqrt(variance);
+### Adding New Features
 
-// Adjust range based on volatility
-const volatilityRatio = stdDev / mean;
-const rangeMultiplier = 1 + volatilityRatio;
+1. **Server-side service**: Add to `server/services/`
+2. **API endpoint**: Add to `server/routes.ts`
+3. **Client hook**: Add to `client/hooks/`
+4. **UI component**: Add to `client/components/`
+5. **Page**: Add to `client/pages/`
 
-// Wider ranges for high volatility, tighter for low
-const baseRangeWidth = 0.1; // 10%
-const adjustedRangeWidth = baseRangeWidth * rangeMultiplier;
+### Type Safety
 
-const lowerBin = priceToBinId(currentPrice * (1 - adjustedRangeWidth), binStep);
-const upperBin = priceToBinId(currentPrice * (1 + adjustedRangeWidth), binStep);
-```
-
-#### Price Bin Calculations
-
-```typescript
-// Convert bin ID to price
-function binIdToPrice(binId: number, binStep: number): number {
-  return Math.pow(1 + binStep / 10000, binId);
-}
-
-// Convert price to bin ID
-function priceToBinId(price: number, binStep: number): number {
-  return Math.floor(Math.log(price) / Math.log(1 + binStep / 10000));
-}
-```
-
-### Implementation Notes
-
-The `src/services/dlmm.service.ts` file contains production-ready SDK integration code. To activate:
-
-1. Ensure `@saros-finance/dlmm-sdk` is installed
-2. Uncomment SDK imports at the top of the file
-3. Replace mock implementations with actual SDK calls (marked with comments)
-4. Test on devnet before mainnet deployment
-
-## Testing
-
-Run tests:
-```bash
-npm test
-```
-
-Test on devnet:
-1. Ensure devnet wallet has SOL
-2. Create test positions in DLMM pools
-3. Run rebalancer with test configuration
-4. Monitor Telegram for alerts
+All data structures are validated using Zod schemas in `shared/schema.ts`. This ensures type safety across the entire stack.
 
 ## Deployment
 
-### Rebalancer Service (Heroku)
-
+### Frontend
 ```bash
-heroku create saros-rebalancer
-heroku config:set WALLET_PRIVATE_KEY=xxx TELEGRAM_BOT_TOKEN=xxx
-git push heroku main
-heroku ps:scale worker=1
+pnpm build
+# Deploy dist/ folder to your hosting provider
 ```
 
-### Analytics Dashboard (Vercel)
-
+### Backend
 ```bash
-vercel --prod
+cd server
+pnpm build
+# Deploy to your Node.js hosting provider
 ```
 
-Or use the "Publish" button in v0 to deploy directly to Vercel.
+## TODO: DLMM SDK Implementation
 
-## Creativity & Innovation
+The current implementation includes placeholder functions for DLMM SDK integration. To complete the integration:
 
-### Why This Project Stands Out
+1. Replace placeholder functions in `server/solana/dlmm-client.ts` with actual SDK calls
+2. Implement position discovery logic
+3. Add proper error handling for blockchain transactions
+4. Configure RPC endpoints for production
 
-1. **Real-World Problem Solving**: Addresses the pain point of manual LP rebalancing
-2. **Volatility-Driven Intelligence**: Uses actual bin data for smart range calculations
-3. **Multi-Feature Integration**: Combines monitoring, automation, analytics, and simulation
-4. **User-Friendly**: Telegram bot makes DeFi accessible to non-technical users
-5. **Production-Ready**: Error handling, logging, modular architecture
-6. **Open-Source Friendly**: Clean code, comprehensive docs, MIT license
-
-### Technical Highlights
-
-- **Bin-Based Volatility**: Leverages DLMM's unique bin structure for precise volatility measurement
-- **Dynamic Range Optimization**: Automatically adjusts position width based on market conditions
-- **Gas Efficiency**: Reduces rebalancing frequency in volatile markets to save on transaction costs
-- **Multi-Pool Scalability**: Efficiently monitors and manages positions across multiple pools
-- **Real-Time Alerts**: Instant Telegram notifications keep users informed without constant monitoring
+Refer to the [Saros DLMM SDK Documentation](https://saros-docs.rectorspace.com/docs/dlmm-sdk/overview) for implementation details.
 
 ## Contributing
 
-Contributions welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Contributions are welcome! Please follow the existing code style and add tests for new features.
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT
 
-## Hackathon Submission
+## Support
 
-**Bounty Categories**:
-- Automated rebalancing tools for liquidity providers ✅
-- Position management for LP Positions (via Telegram bot) ✅
-- Portfolio analytics dashboard for DLMM positions ✅
-- LP strategy simulators and backtesting tools ✅
-- Advanced order types (stop-loss simulation) ✅
-
-**Key Differentiators**:
-- Volatility-adjusted dynamic ranges (unique approach)
-- Multi-system integration (bot + dashboard + simulator)
-- Production-ready code with comprehensive documentation
-- Real SDK integration with clear implementation patterns
-
-**Demo Video**: [Link to demo video]
-
-**Live Demo**: [Deployed dashboard URL]
-
-**Contact**: [Your contact information]
-
----
-
-Built with ❤️ for Saros Finance Hackathon 2025
+For issues and questions:
+- GitHub Issues: [Create an issue]
+- Saros Discord: [Join community]
+- Documentation: [Saros Docs](https://saros-docs.rectorspace.com)

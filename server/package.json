@@ -1,0 +1,57 @@
+{
+  "name": "saros-dlmm-server",
+  "version": "1.0.0",
+  "description": "Production-ready server code for Saros DLMM SDK integration",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node index.ts",
+    "start": "node dist/index.js",
+    "test": "jest",
+    "lint": "eslint . --ext .ts",
+    "format": "prettier --write \"**/*.ts\""
+  },
+  "keywords": [
+    "saros",
+    "dlmm",
+    "solana",
+    "defi",
+    "liquidity",
+    "amm"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "bn.js": "^5.2.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
+    "cors": "^2.8.5",
+    "date-fns": "^4.1.0",
+    "dotenv": "^17.2.3",
+    "embla-carousel-react": "^8.6.0",
+    "express": "^4.18.0",
+    "input-otp": "^1.4.2",
+    "lucide-react": "^0.525.0",
+    "pnpm": "^10.18.1",
+    "vaul": "^1.1.2",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/bn.js": "^5.1.5",
+    "@types/cors": "^2.8.5",
+    "@types/node": "^20.19.19",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "prettier": "^3.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "@saros-finance/dlmm-sdk": "^1.0.0"
+  }
+}
