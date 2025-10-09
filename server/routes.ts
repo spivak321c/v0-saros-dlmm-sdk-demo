@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { PublicKey, Keypair } from "@solana/web3.js";
+import { PublicKey, Keypair, Transaction } from "@solana/web3.js";
 import { positionMonitor } from "./services/position-monitor";
 import { volatilityTracker } from "./services/volatility-tracker";
 import { rebalancer } from "./services/rebalancer";
@@ -20,12 +20,38 @@ router.get("/positions/:wallet", async (req, res) => {
   try {
     const { wallet } = req.params;
     logger.info("GET /positions/:wallet", { wallet });
-    const positions = await positionMonitor.loadUserPositions(wallet);
-    logger.info("Loaded user positions", { wallet, count: positions.length });
 
-    const response: ApiResponse<typeof positions> = {
+    // First try to load from blockchain
+    const positions = await positionMonitor.loadUserPositions(wallet);
+    logger.info("Loaded user positions from blockchain", {
+      wallet,
+      count: positions.length,
+    });
+
+    // Also include positions from storage (for positions without owner field)
+    const allStoredPositions = storage.getAllPositions();
+    const storedPositionsWithoutOwner = allStoredPositions.filter(
+      (p) => !p.position.owner || p.position.owner === ""
+    );
+
+    // Merge both lists, avoiding duplicates
+    const positionMap = new Map();
+    positions.forEach((p) => positionMap.set(p.position.address, p));
+    storedPositionsWithoutOwner.forEach((p) => {
+      if (!positionMap.has(p.position.address)) {
+        positionMap.set(p.position.address, p);
+      }
+    });
+
+    const allPositions = Array.from(positionMap.values());
+    logger.info("Total positions including storage", {
+      wallet,
+      count: allPositions.length,
+    });
+
+    const response: ApiResponse<typeof allPositions> = {
       success: true,
-      data: positions,
+      data: allPositions,
       timestamp: Date.now(),
     };
 
@@ -106,11 +132,19 @@ router.get("/volatility/:poolAddress", async (req, res) => {
   }
 });
 
-// Rebalancing
+// Rebalancing - Prepare unsigned transaction for wallet to sign
 router.post("/rebalance", async (req, res) => {
   try {
-    const { positionAddress, owner } = req.body;
-    logger.info("POST /rebalance", { positionAddress, owner });
+    const { positionAddress, wallet } = req.body;
+    logger.info("POST /rebalance", { positionAddress, wallet });
+
+    if (!positionAddress || !wallet) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing required fields: positionAddress and wallet",
+        timestamp: Date.now(),
+      });
+    }
 
     const shouldRebal = await rebalancer.shouldRebalance(positionAddress);
     logger.info("Checked rebalance necessity", {
@@ -121,7 +155,10 @@ router.post("/rebalance", async (req, res) => {
     if (!shouldRebal) {
       return res.json({
         success: true,
-        data: { message: "Position does not need rebalancing" },
+        data: {
+          needsRebalance: false,
+          message: "Position does not need rebalancing",
+        },
         timestamp: Date.now(),
       });
     }
@@ -142,41 +179,148 @@ router.post("/rebalance", async (req, res) => {
       volatility
     );
 
-    // Load wallet keypair from environment
-    const privateKeyString = process.env.WALLET_PRIVATE_KEY;
-    if (!privateKeyString) {
-      throw new Error("WALLET_PRIVATE_KEY not configured");
-    }
+    logger.info("Preparing rebalance transaction", {
+      positionAddress,
+      newRange,
+    });
 
-    const ownerKeypair = Keypair.fromSecretKey(
-      Buffer.from(privateKeyString, "base64")
+    // Prepare rebalance transaction using DLMM SDK
+    const rebalanceResult = await dlmmClient.rebalancePosition(
+      positionData.position,
+      newRange.lowerBinId,
+      newRange.upperBinId,
+      new PublicKey(wallet)
     );
 
-    logger.info("Executing rebalance", { positionAddress, newRange });
-    const event = await rebalancer.executeRebalance(
-      {
-        positionAddress,
-        newLowerBinId: newRange.lowerBinId,
-        newUpperBinId: newRange.upperBinId,
-        reason: "Manual rebalance",
+    const txData = {
+      needsRebalance: true,
+      positionAddress,
+      currentRange: {
+        lowerBinId: positionData.position.lowerBinId,
+        upperBinId: positionData.position.upperBinId,
       },
-      ownerKeypair
-    );
-    logger.info("Rebalance executed successfully", { positionAddress, event });
+      newRange,
+      transaction: rebalanceResult.transaction,
+      newPositionMint: rebalanceResult.positionMint,
+      message: "Rebalance transaction prepared. Please sign with your wallet.",
+    };
+
+    logger.info("Rebalance transaction prepared", {
+      positionAddress,
+      newPositionMint: rebalanceResult.positionMint,
+    });
 
     res.json({
       success: true,
-      data: event,
+      data: txData,
       timestamp: Date.now(),
     });
   } catch (error) {
-    logger.error("Failed to rebalance", {
+    logger.error("Failed to prepare rebalance", {
       positionAddress: req.body.positionAddress,
       error: error instanceof Error ? error.message : String(error),
     });
     res.status(500).json({
       success: false,
-      error: error instanceof Error ? error.message : "Failed to rebalance",
+      error:
+        error instanceof Error ? error.message : "Failed to prepare rebalance",
+      timestamp: Date.now(),
+    });
+  }
+});
+
+// Execute signed rebalance transaction
+router.post("/rebalance/execute", async (req, res) => {
+  try {
+    const { signedTransaction, positionAddress, newPositionMint } = req.body;
+    logger.info("POST /rebalance/execute", {
+      positionAddress,
+      newPositionMint,
+    });
+
+    if (!signedTransaction || !positionAddress || !newPositionMint) {
+      return res.status(400).json({
+        success: false,
+        error:
+          "Missing required fields: signedTransaction, positionAddress, newPositionMint",
+        timestamp: Date.now(),
+      });
+    }
+
+    // Deserialize and send the signed transaction
+    const txBuffer = Buffer.from(signedTransaction, "base64");
+    const transaction = Transaction.from(txBuffer);
+
+    const { getConnection } = await import("./solana/connection");
+    const connection = getConnection();
+
+    const signature = await connection.sendRawTransaction(
+      transaction.serialize(),
+      {
+        skipPreflight: false,
+        preflightCommitment: "confirmed",
+      }
+    );
+
+    logger.info("Rebalance transaction sent", { signature, positionAddress });
+
+    // Wait for confirmation
+    const confirmation = await connection.confirmTransaction(
+      signature,
+      "confirmed"
+    );
+
+    if (confirmation.value.err) {
+      throw new Error(
+        `Transaction failed: ${JSON.stringify(confirmation.value.err)}`
+      );
+    }
+
+    logger.info("Rebalance transaction confirmed", {
+      signature,
+      positionAddress,
+    });
+
+    // Store rebalance event
+    const positionData = storage.getPosition(positionAddress);
+    if (positionData) {
+      const rebalanceEvent = {
+        id: signature,
+        positionAddress,
+        timestamp: Date.now(),
+        oldRange: {
+          lowerBinId: positionData.position.lowerBinId,
+          upperBinId: positionData.position.upperBinId,
+        },
+        newRange: {
+          lowerBinId: 0, // Will be updated when new position is loaded
+          upperBinId: 0,
+        },
+        reason: "Manual rebalance",
+        signature,
+        status: "success" as const,
+      };
+      storage.addRebalanceEvent(rebalanceEvent);
+    }
+
+    res.json({
+      success: true,
+      data: {
+        signature,
+        newPositionMint,
+        message: "Rebalance executed successfully",
+      },
+      timestamp: Date.now(),
+    });
+  } catch (error) {
+    logger.error("Failed to execute rebalance", {
+      positionAddress: req.body.positionAddress,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    res.status(500).json({
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Failed to execute rebalance",
       timestamp: Date.now(),
     });
   }
@@ -873,6 +1017,41 @@ router.post("/telegram/disable", (req, res) => {
       success: false,
       error:
         error instanceof Error ? error.message : "Failed to disable Telegram",
+      timestamp: Date.now(),
+    });
+  }
+});
+
+// Telegram Test Endpoint
+router.post("/telegram/test", async (req, res) => {
+  try {
+    logger.info("POST /telegram/test");
+
+    await telegramBot.sendAlert({
+      id: `test-${Date.now()}`,
+      type: "info",
+      title: "Test Alert",
+      message:
+        "This is a test message from your Saros DLMM bot! 🚀\n\nIf you received this, your Telegram integration is working correctly.",
+      timestamp: Date.now(),
+      read: false,
+    });
+
+    logger.info("Test message sent to Telegram");
+
+    res.json({
+      success: true,
+      data: { message: "Test message sent to Telegram" },
+      timestamp: Date.now(),
+    });
+  } catch (error) {
+    logger.error("Failed to send test message", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    res.status(500).json({
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Failed to send test message",
       timestamp: Date.now(),
     });
   }

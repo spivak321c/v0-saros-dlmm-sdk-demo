@@ -1,216 +1,249 @@
-import { useEffect, useState } from 'react';
-import { useWalletPositions } from '../hooks/use-wallet-positions';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useEffect, useState } from "react";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { useWalletPositions } from "../hooks/use-wallet-positions";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TrendingUp, DollarSign, Activity, Wallet } from "lucide-react";
 import {
   LineChart,
   Line,
   AreaChart,
   Area,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-} from 'recharts';
+  Legend,
+} from "recharts";
 
 export default function Analytics() {
-  const { data: positions } = useWalletPositions();
-  const [analyticsData, setAnalyticsData] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
+  const { publicKey } = useWallet();
+  const { data: positions, isLoading } = useWalletPositions();
+  const [performanceData, setPerformanceData] = useState<any[]>([]);
+  const [feeData, setFeeData] = useState<any[]>([]);
 
   useEffect(() => {
     if (positions && positions.length > 0) {
-      console.log('[Analytics] Positions loaded:', positions.length);
-      loadAnalytics();
+      // Generate mock historical data based on current positions
+      const mockPerformance = Array.from({ length: 30 }, (_, i) => ({
+        day: `Day ${i + 1}`,
+        value:
+          positions.reduce((sum, p) => sum + (p.currentValue || 0), 0) *
+          (0.95 + Math.random() * 0.1),
+        fees:
+          positions.reduce((sum, p) => sum + (p.feesEarned?.total || 0), 0) *
+          (i / 30),
+      }));
+      setPerformanceData(mockPerformance);
+
+      // Fee breakdown by position
+      const feeBreakdown = positions.slice(0, 5).map((p) => ({
+        name: `${p.pool?.tokenX?.symbol}/${p.pool?.tokenY?.symbol}`,
+        fees: p.feesEarned?.total || 0,
+      }));
+      setFeeData(feeBreakdown);
     }
   }, [positions]);
 
-  const loadAnalytics = async () => {
-    setLoading(true);
-    try {
-      console.log('[Analytics] Loading analytics data...');
-      // Analytics data is calculated from positions
-      const totalValue = positions?.reduce((sum, pos) => sum + pos.currentValue, 0) || 0;
-      const totalFees = positions?.reduce((sum, pos) => sum + pos.feesEarned.total, 0) || 0;
-      
-      setAnalyticsData({
-        totalValue,
-        totalFees,
-        positionCount: positions?.length || 0,
-      });
-      
-      console.log('[Analytics] Analytics data loaded:', { totalValue, totalFees });
-    } catch (error) {
-      console.error('[Analytics] Failed to load analytics:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (!publicKey) {
+    return (
+      <div className="flex items-center justify-center min-h-[80vh] p-4">
+        <Card className="max-w-md w-full">
+          <CardContent className="pt-6 text-center">
+            <Wallet className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+            <h2 className="text-xl font-semibold mb-2">Connect Your Wallet</h2>
+            <p className="text-muted-foreground">
+              Connect your wallet to view analytics
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
-  // Generate mock data for charts
-  const generateChartData = (): Array<{
-    date: string;
-    value: number;
-    fees: number;
-    yield: number;
-  }> => {
-    const data: Array<{
-      date: string;
-      value: number;
-      fees: number;
-      yield: number;
-    }> = [];
-    for (let i = 30; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      data.push({
-        date: date.toLocaleDateString(),
-        value: 10000 + Math.random() * 2000,
-        fees: 50 + Math.random() * 100,
-        yield: 0.1 + Math.random() * 0.3,
-      });
-    }
-    return data;
-  };
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[80vh]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading analytics...</p>
+        </div>
+      </div>
+    );
+  }
 
-  const chartData = generateChartData();
-
-  const totalValue = analyticsData?.totalValue || 0;
-  const totalFees = analyticsData?.totalFees || 0;
+  const totalValue =
+    positions?.reduce((sum, p) => sum + (p.currentValue || 0), 0) || 0;
+  const totalFees =
+    positions?.reduce((sum, p) => sum + (p.feesEarned?.total || 0), 0) || 0;
+  const avgAPY =
+    positions && positions.length > 0
+      ? (positions.reduce(
+          (sum, p) => sum + (p.performance?.dailyYield || 0),
+          0
+        ) /
+          positions.length) *
+        365 *
+        100
+      : 0;
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Analytics</h1>
-        <p className="text-gray-600">Performance metrics and insights</p>
+    <div className="space-y-6 p-4 md:p-6 lg:p-8 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="space-y-2">
+        <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
+          Analytics
+        </h1>
+        <p className="text-muted-foreground">
+          Detailed performance metrics and insights
+        </p>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium text-gray-600">Total Value</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <DollarSign className="h-4 w-4" />
+              Total Value
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">${totalValue.toLocaleString()}</p>
+            <div className="text-2xl font-bold">${totalValue.toFixed(2)}</div>
           </CardContent>
         </Card>
+
         <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium text-gray-600">Total Fees</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" />
+              Total Fees
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-green-600">${totalFees.toLocaleString()}</p>
+            <div className="text-2xl font-bold text-success">
+              ${totalFees.toFixed(2)}
+            </div>
           </CardContent>
         </Card>
+
         <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium text-gray-600">Positions</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <Activity className="h-4 w-4" />
+              Avg APY
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{positions?.length || 0}</p>
+            <div className="text-2xl font-bold">{avgAPY.toFixed(2)}%</div>
           </CardContent>
         </Card>
       </div>
 
       {/* Charts */}
-      <Tabs defaultValue="value" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="value">Portfolio Value</TabsTrigger>
-          <TabsTrigger value="fees">Cumulative Fees</TabsTrigger>
-          <TabsTrigger value="yield">Daily Yield</TabsTrigger>
+      <Tabs defaultValue="performance" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-2 max-w-md">
+          <TabsTrigger value="performance">Performance</TabsTrigger>
+          <TabsTrigger value="fees">Fee Breakdown</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="value">
+        <TabsContent value="performance" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Portfolio Value Over Time</CardTitle>
+              <CardTitle>Portfolio Performance</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData}>
+              {performanceData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={350}>
+                  <AreaChart data={performanceData}>
                     <defs>
-                      <linearGradient id="valueGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
+                      <linearGradient
+                        id="colorValue"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="5%"
+                          stopColor="hsl(var(--primary))"
+                          stopOpacity={0.3}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor="hsl(var(--primary))"
+                          stopOpacity={0}
+                        />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <Tooltip />
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      className="stroke-muted"
+                    />
+                    <XAxis dataKey="day" className="text-xs" />
+                    <YAxis className="text-xs" />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "8px",
+                      }}
+                    />
                     <Area
                       type="monotone"
                       dataKey="value"
-                      stroke="#3B82F6"
-                      strokeWidth={2}
-                      fill="url(#valueGradient)"
+                      stroke="hsl(var(--primary))"
+                      fillOpacity={1}
+                      fill="url(#colorValue)"
                     />
                   </AreaChart>
                 </ResponsiveContainer>
-              </div>
+              ) : (
+                <div className="h-[350px] flex items-center justify-center text-muted-foreground">
+                  No performance data available
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="fees">
+        <TabsContent value="fees" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Cumulative Fees Earned</CardTitle>
+              <CardTitle>Fees by Position</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData}>
-                    <defs>
-                      <linearGradient id="feesGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <Tooltip />
-                    <Area
-                      type="monotone"
+              {feeData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={350}>
+                  <BarChart data={feeData}>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      className="stroke-muted"
+                    />
+                    <XAxis dataKey="name" className="text-xs" />
+                    <YAxis className="text-xs" />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "8px",
+                      }}
+                    />
+                    <Bar
                       dataKey="fees"
-                      stroke="#10B981"
-                      strokeWidth={2}
-                      fill="url(#feesGradient)"
+                      fill="hsl(var(--success))"
+                      radius={[8, 8, 0, 0]}
                     />
-                  </AreaChart>
+                  </BarChart>
                 </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="yield">
-          <Card>
-            <CardHeader>
-              <CardTitle>Daily Yield %</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <Tooltip />
-                    <Line
-                      type="monotone"
-                      dataKey="yield"
-                      stroke="#8B5CF6"
-                      strokeWidth={2}
-                      dot={false}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
+              ) : (
+                <div className="h-[350px] flex items-center justify-center text-muted-foreground">
+                  No fee data available
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

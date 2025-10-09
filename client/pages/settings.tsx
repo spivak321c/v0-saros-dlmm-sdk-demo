@@ -11,8 +11,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
+import { useToast } from "@/hooks/use-toast";
+import { Save, AlertCircle } from "lucide-react";
+
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 
 export default function Settings() {
+  const { toast } = useToast();
   const [autoRebalance, setAutoRebalance] = useState(false);
   const [autoCollectFees, setAutoCollectFees] = useState(true);
   const [rebalanceThreshold, setRebalanceThreshold] = useState([5]);
@@ -20,6 +25,7 @@ export default function Settings() {
   const [stopLossEnabled, setStopLossEnabled] = useState(false);
   const [stopLossThreshold, setStopLossThreshold] = useState([10]);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadSettings();
@@ -27,12 +33,8 @@ export default function Settings() {
 
   const loadSettings = async () => {
     try {
-      const apiUrl = `${import.meta.env.VITE_API_URL ||
-        "http://localhost:3001/api"}/settings`;
-      console.log("[Settings] Loading settings from:", apiUrl);
-      const response = await fetch(apiUrl);
+      const response = await fetch(`${API_URL}/settings`);
       const result = await response.json();
-      console.log("[Settings] Loaded settings:", result);
 
       if (result.success && result.data) {
         const settings = result.data;
@@ -45,221 +47,209 @@ export default function Settings() {
       }
     } catch (error) {
       console.error("[Settings] Failed to load settings:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load settings",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const saveSettings = async (settingsData: any) => {
+  const saveSettings = async () => {
     setSaving(true);
     try {
-      const apiUrl = `${import.meta.env.VITE_API_URL ||
-        "http://localhost:3001/api"}/settings`;
-      console.log("[Settings] Saving settings to:", apiUrl, settingsData);
-      const response = await fetch(apiUrl, {
+      const settingsData = {
+        autoRebalance,
+        autoCollectFees,
+        rebalanceThreshold: rebalanceThreshold[0],
+        feeThreshold,
+        stopLossEnabled,
+        stopLossThreshold: stopLossThreshold[0],
+      };
+
+      const response = await fetch(`${API_URL}/settings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(settingsData),
       });
+
       const result = await response.json();
-      console.log("[Settings] Save response:", result);
 
       if (result.success) {
-        console.log("[Settings] Settings saved successfully");
+        toast({
+          title: "Success",
+          description: "Settings saved successfully",
+        });
+      } else {
+        throw new Error(result.error || "Failed to save settings");
       }
     } catch (error) {
       console.error("[Settings] Failed to save settings:", error);
+      toast({
+        title: "Error",
+        description:
+          error instanceof Error ? error.message : "Failed to save settings",
+        variant: "destructive",
+      });
     } finally {
       setSaving(false);
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[80vh]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading settings...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Settings</h1>
-        <p className="text-gray-600">Configure automation and preferences</p>
+    <div className="space-y-6 p-4 md:p-6 lg:p-8 max-w-4xl mx-auto">
+      {/* Header */}
+      <div className="space-y-2">
+        <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
+          Settings
+        </h1>
+        <p className="text-muted-foreground">
+          Configure automation and risk management preferences
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Auto Rebalancing */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Auto Rebalancing</CardTitle>
-            <CardDescription>
-              Automatically rebalance positions when price moves beyond
-              threshold
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="auto-rebalance">Enable Auto Rebalancing</Label>
-              <Switch
-                id="auto-rebalance"
-                checked={autoRebalance}
-                onCheckedChange={setAutoRebalance}
+      {/* Automation Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Automation</CardTitle>
+          <CardDescription>
+            Configure automatic position management
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="auto-rebalance">Auto Rebalance</Label>
+              <p className="text-sm text-muted-foreground">
+                Automatically rebalance positions when out of range
+              </p>
+            </div>
+            <Switch
+              id="auto-rebalance"
+              checked={autoRebalance}
+              onCheckedChange={setAutoRebalance}
+            />
+          </div>
+
+          {autoRebalance && (
+            <div className="space-y-2 pl-4 border-l-2 border-primary/20">
+              <Label>Rebalance Threshold: {rebalanceThreshold[0]}%</Label>
+              <Slider
+                value={rebalanceThreshold}
+                onValueChange={setRebalanceThreshold}
+                min={1}
+                max={20}
+                step={1}
               />
+              <p className="text-xs text-muted-foreground">
+                Trigger rebalance when price moves this % outside range
+              </p>
             </div>
+          )}
 
-            {autoRebalance && (
-              <div className="space-y-2">
-                <Label>Rebalance Threshold: {rebalanceThreshold[0]}%</Label>
-                <Slider
-                  value={rebalanceThreshold}
-                  onValueChange={setRebalanceThreshold}
-                  min={1}
-                  max={20}
-                  step={1}
-                />
-                <p className="text-sm text-gray-500">
-                  Rebalance when price is within {rebalanceThreshold[0]}% of
-                  range boundary
-                </p>
-              </div>
-            )}
+          <div className="flex items-center justify-between pt-4 border-t">
+            <div className="space-y-0.5">
+              <Label htmlFor="auto-collect">Auto Collect Fees</Label>
+              <p className="text-sm text-muted-foreground">
+                Automatically collect fees when threshold is reached
+              </p>
+            </div>
+            <Switch
+              id="auto-collect"
+              checked={autoCollectFees}
+              onCheckedChange={setAutoCollectFees}
+            />
+          </div>
 
-            <Button
-              className="w-full"
-              disabled={!autoRebalance || saving}
-              onClick={() =>
-                saveSettings({
-                  autoRebalance,
-                  rebalanceThreshold: rebalanceThreshold[0],
-                })
-              }
-            >
-              {saving ? "Saving..." : "Save Rebalancing Settings"}
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Auto Fee Collection */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Auto Fee Collection</CardTitle>
-            <CardDescription>
-              Automatically collect fees when they reach the threshold
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="auto-fees">Enable Auto Collection</Label>
-              <Switch
-                id="auto-fees"
-                checked={autoCollectFees}
-                onCheckedChange={setAutoCollectFees}
+          {autoCollectFees && (
+            <div className="space-y-2 pl-4 border-l-2 border-primary/20">
+              <Label htmlFor="fee-threshold">Fee Threshold ($)</Label>
+              <Input
+                id="fee-threshold"
+                type="number"
+                value={feeThreshold}
+                onChange={(e) => setFeeThreshold(Number(e.target.value))}
+                min={1}
               />
+              <p className="text-xs text-muted-foreground">
+                Collect fees when they reach this amount
+              </p>
             </div>
+          )}
+        </CardContent>
+      </Card>
 
-            {autoCollectFees && (
-              <div className="space-y-2">
-                <Label>Collection Threshold ($)</Label>
-                <Input
-                  type="number"
-                  value={feeThreshold}
-                  onChange={(e) => setFeeThreshold(Number(e.target.value))}
-                />
-                <p className="text-sm text-gray-500">
-                  Collect fees when they reach ${feeThreshold}
-                </p>
-              </div>
-            )}
+      {/* Risk Management */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Risk Management</CardTitle>
+          <CardDescription>
+            Configure stop-loss and risk controls
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="stop-loss">Stop Loss Protection</Label>
+              <p className="text-sm text-muted-foreground">
+                Automatically close positions at loss threshold
+              </p>
+            </div>
+            <Switch
+              id="stop-loss"
+              checked={stopLossEnabled}
+              onCheckedChange={setStopLossEnabled}
+            />
+          </div>
 
-            <Button
-              className="w-full"
-              disabled={!autoCollectFees || saving}
-              onClick={() => saveSettings({ autoCollectFees, feeThreshold })}
-            >
-              {saving ? "Saving..." : "Save Collection Settings"}
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Stop Loss */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Stop Loss Protection</CardTitle>
-            <CardDescription>
-              Automatically close positions to limit losses
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="stop-loss">Enable Stop Loss</Label>
-              <Switch
-                id="stop-loss"
-                checked={stopLossEnabled}
-                onCheckedChange={setStopLossEnabled}
+          {stopLossEnabled && (
+            <div className="space-y-2 pl-4 border-l-2 border-destructive/20">
+              <Label>Stop Loss Threshold: {stopLossThreshold[0]}%</Label>
+              <Slider
+                value={stopLossThreshold}
+                onValueChange={setStopLossThreshold}
+                min={5}
+                max={50}
+                step={5}
               />
+              <p className="text-xs text-muted-foreground">
+                Close position when loss exceeds this percentage
+              </p>
             </div>
+          )}
 
-            {stopLossEnabled && (
-              <div className="space-y-2">
-                <Label>Loss Threshold: {stopLossThreshold[0]}%</Label>
-                <Slider
-                  value={stopLossThreshold}
-                  onValueChange={setStopLossThreshold}
-                  min={5}
-                  max={50}
-                  step={5}
-                />
-                <p className="text-sm text-gray-500">
-                  Close position if loss exceeds {stopLossThreshold[0]}%
-                </p>
-              </div>
-            )}
-
-            <Button
-              className="w-full"
-              variant="destructive"
-              disabled={!stopLossEnabled || saving}
-              onClick={() =>
-                saveSettings({
-                  stopLossEnabled,
-                  stopLossThreshold: stopLossThreshold[0],
-                })
-              }
-            >
-              {saving ? "Saving..." : "Save Stop Loss Settings"}
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Notifications */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Notifications</CardTitle>
-            <CardDescription>
-              Configure alerts and notifications
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="notify-rebalance">Rebalance Alerts</Label>
-              <Switch id="notify-rebalance" defaultChecked />
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-warning/10 border border-warning/20">
+            <AlertCircle className="h-4 w-4 text-warning mt-0.5 flex-shrink-0" />
+            <div className="space-y-1 flex-1">
+              <p className="text-xs font-medium text-warning">Important</p>
+              <p className="text-xs text-muted-foreground">
+                Automated actions require wallet approval. Make sure your wallet
+                is connected and unlocked.
+              </p>
             </div>
+          </div>
+        </CardContent>
+      </Card>
 
-            <div className="flex items-center justify-between">
-              <Label htmlFor="notify-fees">Fee Collection Alerts</Label>
-              <Switch id="notify-fees" defaultChecked />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <Label htmlFor="notify-risk">Risk Warnings</Label>
-              <Switch id="notify-risk" defaultChecked />
-            </div>
-
-            <Button
-              className="w-full"
-              disabled={saving}
-              onClick={() =>
-                saveSettings({
-                  notifications: { rebalance: true, fees: true, risk: true },
-                })
-              }
-            >
-              {saving ? "Saving..." : "Save Notification Settings"}
-            </Button>
-          </CardContent>
-        </Card>
+      {/* Save Button */}
+      <div className="flex justify-end">
+        <Button onClick={saveSettings} disabled={saving} className="gap-2">
+          <Save className="h-4 w-4" />
+          {saving ? "Saving..." : "Save Settings"}
+        </Button>
       </div>
     </div>
   );
