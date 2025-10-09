@@ -1,32 +1,34 @@
-import { useState } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
-import { useWalletPositions } from '../hooks/use-wallet-positions';
-import { WalletButton } from '../components/wallet-button';
-import { WebSocketStatus } from '../components/websocket-status';
-import { MetricCard } from '../components/metric-card';
-import { PositionCard } from '../components/position-card';
-import { PositionCreator } from '../components/position-creator';
-import { DollarSign, TrendingUp, Activity, Percent } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { useState } from "react";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { useWalletPositions } from "../hooks/use-wallet-positions";
+import { WalletButton } from "../components/wallet-button";
+import { WebSocketStatus } from "../components/websocket-status";
+import { MetricCard } from "../components/metric-card";
+import { PositionCard } from "../components/position-card";
+import { PositionCreator } from "../components/position-creator";
+import { DollarSign, TrendingUp, Activity, Percent } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export default function Dashboard() {
   const { publicKey } = useWallet();
   const { data: positions, isLoading, refetch } = useWalletPositions();
   const [showCreatePosition, setShowCreatePosition] = useState(false);
 
-  console.log('[Dashboard] Render state:', { 
-    publicKey: publicKey?.toString(), 
-    positionsCount: positions?.length, 
-    isLoading 
+  console.log("[Dashboard] Render state:", {
+    publicKey: publicKey?.toString(),
+    positionsCount: positions?.length,
+    isLoading,
   });
 
   if (!publicKey) {
-    console.log('[Dashboard] No wallet connected');
+    console.log("[Dashboard] No wallet connected");
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center space-y-4">
           <h1 className="text-3xl font-bold">Saros LP Dashboard</h1>
-          <p className="text-gray-600">Connect your wallet to view and manage positions</p>
+          <p className="text-gray-600">
+            Connect your wallet to view and manage positions
+          </p>
           <WalletButton />
         </div>
       </div>
@@ -34,7 +36,7 @@ export default function Dashboard() {
   }
 
   if (isLoading) {
-    console.log('[Dashboard] Loading positions...');
+    console.log("[Dashboard] Loading positions...");
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -45,14 +47,25 @@ export default function Dashboard() {
     );
   }
 
-  const totalValue = positions?.reduce((sum, pos) => sum + pos.currentValue, 0) || 0;
-  const totalFees = positions?.reduce((sum, pos) => sum + pos.feesEarned.total, 0) || 0;
+  const totalValue =
+    positions?.reduce((sum, pos) => sum + pos.currentValue, 0) || 0;
+  const totalFees =
+    positions?.reduce((sum, pos) => sum + pos.feesEarned.total, 0) || 0;
   const avgYield = positions?.length
-    ? positions.reduce((sum, pos) => sum + pos.performance.dailyYield, 0) / positions.length
+    ? positions.reduce(
+        (sum, pos) => sum + (pos.performance.dailyYield ?? 0),
+        0
+      ) / positions.length
     : 0;
-  const inRangeCount = positions?.filter((pos) => pos.riskMetrics.isInRange).length || 0;
+  const inRangeCount =
+    positions?.filter((pos) => pos.riskMetrics.isInRange).length || 0;
 
-  console.log('[Dashboard] Calculated metrics:', { totalValue, totalFees, avgYield, inRangeCount });
+  console.log("[Dashboard] Calculated metrics:", {
+    totalValue,
+    totalFees,
+    avgYield,
+    inRangeCount,
+  });
 
   return (
     <div className="p-6 space-y-6">
@@ -100,19 +113,48 @@ export default function Dashboard() {
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-2xl font-semibold">Active Positions</h2>
-          <Button onClick={() => setShowCreatePosition(true)}>Create Position</Button>
+          <Button onClick={() => setShowCreatePosition(true)}>
+            Create Position
+          </Button>
         </div>
 
         {!positions || positions.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-lg border">
             <p className="text-gray-500 mb-4">No positions found</p>
-            <Button onClick={() => setShowCreatePosition(true)}>Create Your First Position</Button>
+            <Button onClick={() => setShowCreatePosition(true)}>
+              Create Your First Position
+            </Button>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {positions.map((position) => (
-              <PositionCard key={position.position.address} position={position} />
-            ))}
+            {positions.map((position) => {
+              console.log("[Dashboard] Rendering position:", {
+                address: position.position.address,
+                pool: `${position.pool.tokenX.symbol}/${position.pool.tokenY.symbol}`,
+                value: position.currentValue,
+                fees: position.feesEarned.total,
+              });
+              return (
+                <PositionCard
+                  key={position.position.address}
+                  position={position}
+                  onCollectFees={() => {
+                    console.log(
+                      "[Dashboard] Collect fees for:",
+                      position.position.address
+                    );
+                    // TODO: Implement fee collection
+                  }}
+                  onRebalance={() => {
+                    console.log(
+                      "[Dashboard] Rebalance position:",
+                      position.position.address
+                    );
+                    // TODO: Implement rebalance
+                  }}
+                />
+              );
+            })}
           </div>
         )}
       </div>

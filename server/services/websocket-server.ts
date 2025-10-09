@@ -1,4 +1,5 @@
 import WebSocket from "ws";
+import type { Server as HTTPServer } from "http";
 import storage from "../storage";
 import { logger } from "../utils/logger";
 import type { WSMessage } from "../../shared/schema";
@@ -8,9 +9,9 @@ export class WSServer {
   private clients: Set<any> = new Set();
   private updateInterval: NodeJS.Timeout | null = null;
 
-  start(port: number = 8080) {
-    logger.info("Starting WebSocket server", { port });
-    this.wss = new WebSocket.Server({ port });
+  start(server: HTTPServer) {
+    logger.info("Starting WebSocket server on HTTP server");
+    this.wss = new WebSocket.Server({ server, path: "/ws" });
 
     this.wss.on("connection", (ws: any) => {
       logger.info("WebSocket client connected", {
@@ -37,7 +38,7 @@ export class WSServer {
     // Start periodic updates
     this.startPeriodicUpdates();
 
-    logger.info("WebSocket server started successfully", { port });
+    logger.info("WebSocket server started successfully on /ws path");
   }
 
   stop() {

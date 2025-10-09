@@ -33,6 +33,11 @@ export function useWalletPositions() {
       return data.data;
     },
     enabled: !!publicKey,
+    // Refetch more frequently to catch newly created positions
+    refetchInterval: 8000, // Refetch every 8 seconds
+    staleTime: 3000, // Consider data stale after 3 seconds
+    retry: 2, // Retry failed requests
+    retryDelay: 1000, // Wait 1 second between retries
   });
 }
 

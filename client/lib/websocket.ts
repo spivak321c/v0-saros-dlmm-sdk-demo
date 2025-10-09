@@ -6,10 +6,10 @@ const getWsUrl = () => {
     return import.meta.env.VITE_WS_URL;
   }
 
-  // Use current host for WebSocket connection
+  // Use current host for WebSocket connection with /ws path
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const host = window.location.host;
-  return `${protocol}//${host}`;
+  return `${protocol}//${host}/ws`;
 };
 
 const WS_URL = getWsUrl();

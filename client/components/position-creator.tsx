@@ -262,8 +262,17 @@ export function PositionCreator({
             8
           )}...`,
         });
+
         onOpenChange(false);
-        onSuccess?.();
+
+        // Wait for blockchain indexing before refreshing (8 seconds)
+        // Solana devnet can be slow to index new positions
+        setTimeout(() => {
+          console.log(
+            "[PositionCreator] Triggering position refresh after delay"
+          );
+          onSuccess?.();
+        }, 8000);
       } else {
         throw new Error(result.error || "Failed to create position");
       }

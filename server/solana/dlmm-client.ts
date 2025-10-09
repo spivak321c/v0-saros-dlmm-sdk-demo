@@ -148,59 +148,118 @@ export class DLMMClient {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  async getUserPositions(walletAddress: PublicKey): Promise<Position[]> {
+  async getUserPositions(
+    walletAddress: PublicKey,
+    specificPool?: PublicKey
+  ): Promise<Position[]> {
     try {
       logger.debug("Fetching user positions", {
         wallet: walletAddress.toString(),
+        specificPool: specificPool?.toString(),
       });
 
-      // Get all pool addresses - limit to first 20 to avoid rate limits
-      const poolAddresses = await this.sarosDLMM.fetchPoolAddresses();
-      const limitedPools = poolAddresses.slice(0, 20);
-      logger.debug("Checking pools for user positions", {
-        wallet: walletAddress.toString(),
-        poolCount: limitedPools.length,
-      });
+      // If a specific pool is provided, only check that pool
+      let poolsToCheck: string[];
+
+      if (specificPool) {
+        poolsToCheck = [specificPool.toString()];
+        logger.debug("Checking specific pool for positions", {
+          pool: specificPool.toString(),
+        });
+      } else {
+        // According to Saros DLMM SDK docs, we need to query positions by pool
+        // Get all pool addresses
+        const poolAddresses = await this.sarosDLMM.fetchPoolAddresses();
+        logger.debug("Total pools available", { count: poolAddresses.length });
+
+        // Limit pools to avoid rate limits and timeouts
+        poolsToCheck = poolAddresses.slice(0, 30);
+        logger.debug("Checking pools for user positions", {
+          wallet: walletAddress.toString(),
+          poolCount: poolsToCheck.length,
+        });
+      }
 
       const allPositions: Position[] = [];
+      let checkedPools = 0;
+      let poolsWithPositions = 0;
 
       // Query pools sequentially with delay to avoid rate limits
-      for (const poolAddr of limitedPools) {
+      for (const poolAddr of poolsToCheck) {
         try {
+          checkedPools++;
+
+          // Use getUserPositions from SDK - it requires both payer and pair
           const positions = await this.sarosDLMM.getUserPositions({
             payer: walletAddress,
             pair: new PublicKey(poolAddr),
           });
 
+          logger.debug("Checked pool for positions", {
+            poolAddress: poolAddr,
+            positionsFound: positions?.length || 0,
+            positionsType: typeof positions,
+            positionsIsArray: Array.isArray(positions),
+          });
+
           if (positions && positions.length > 0) {
-            logger.debug("Found positions in pool", {
+            poolsWithPositions++;
+            logger.info("Found positions in pool - full structure", {
               poolAddress: poolAddr,
               count: positions.length,
+              firstPositionKeys: Object.keys(positions[0]),
+              firstPositionFull: JSON.stringify(positions[0], null, 2),
             });
+
             for (const position of positions) {
-              allPositions.push({
-                address: position.publicKey.toString(),
+              // Log the actual position object to understand its structure
+              logger.debug("Raw position object", {
+                position: JSON.stringify(position, null, 2),
+                keys: Object.keys(position),
+              });
+
+              // Extract position data from SDK response
+              const posData = {
+                address: position.position?.toString() || "",
                 poolAddress: poolAddr,
                 owner: walletAddress.toString(),
                 lowerBinId: position.lowerBinId || 0,
                 upperBinId: position.upperBinId || 0,
-                liquidityX: position.totalXAmount?.toString() || "0",
-                liquidityY: position.totalYAmount?.toString() || "0",
+                liquidityX:
+                  position.totalXAmount?.toString() ||
+                  position.liquidityX?.toString() ||
+                  "0",
+                liquidityY:
+                  position.totalYAmount?.toString() ||
+                  position.liquidityY?.toString() ||
+                  "0",
                 feeX: position.feeX?.toString() || "0",
                 feeY: position.feeY?.toString() || "0",
                 rewardOne: position.rewardOne?.toString() || "0",
                 rewardTwo: position.rewardTwo?.toString() || "0",
                 lastUpdatedAt: position.lastUpdatedAt || Date.now(),
                 createdAt: position.lastUpdatedAt || Date.now(),
-              });
+              };
+
+              logger.debug("Parsed position data", { posData });
+              allPositions.push(posData);
             }
           }
 
-          // Add 200ms delay between requests to avoid rate limits
-          await this.delay(200);
+          // Add delay between requests to avoid rate limits (429 errors)
+          await this.delay(300);
         } catch (err) {
           // Skip pools where user has no positions or errors occur
-          logger.debug("Skipping pool", { poolAddress: poolAddr });
+          const errorMsg = err instanceof Error ? err.message : String(err);
+          if (
+            !errorMsg.includes("429") &&
+            !errorMsg.includes("Account does not exist")
+          ) {
+            logger.debug("Error checking pool for positions", {
+              poolAddress: poolAddr,
+              error: errorMsg,
+            });
+          }
           continue;
         }
       }
@@ -208,7 +267,10 @@ export class DLMMClient {
       logger.info("User positions fetched", {
         wallet: walletAddress.toString(),
         totalPositions: allPositions.length,
+        poolsChecked: checkedPools,
+        poolsWithPositions,
       });
+
       return allPositions;
     } catch (error) {
       logger.error("Failed to fetch user positions", {
@@ -229,10 +291,20 @@ export class DLMMClient {
 
       if (!positionAccount) return null;
 
+      // Log the actual structure to understand what we're getting
+      logger.debug("Position account structure", {
+        positionAddress: positionAddress.toString(),
+        keys: Object.keys(positionAccount),
+        fullObject: JSON.stringify(positionAccount, null, 2),
+      });
+
       const position = {
         address: positionAddress.toString(),
-        poolAddress: positionAccount.lbPair.toString(),
-        owner: positionAccount.owner.toString(),
+        poolAddress:
+          positionAccount.lbPair?.toString() ||
+          positionAccount.pair?.toString() ||
+          "",
+        owner: positionAccount.owner?.toString() || "",
         lowerBinId: positionAccount.lowerBinId || 0,
         upperBinId: positionAccount.upperBinId || 0,
         liquidityX: positionAccount.totalXAmount?.toString() || "0",
@@ -274,8 +346,8 @@ export class DLMMClient {
 
   async prepareCreatePositionTransaction(
     poolAddress: PublicKey,
-    absoluteLowerBinId: number,
-    absoluteUpperBinId: number,
+    lowerBinId: number,
+    upperBinId: number,
     amountX: string,
     amountY: string,
     walletPublicKey: PublicKey
@@ -283,57 +355,85 @@ export class DLMMClient {
     try {
       logger.info("Preparing position creation transaction", {
         poolAddress: poolAddress.toString(),
-        absoluteLowerBinId,
-        absoluteUpperBinId,
+        lowerBinId,
+        upperBinId,
         amountX,
         amountY,
       });
-      // Get active bin ID to calculate relative positions
+
+      // Get pair account to get active bin
       const pairAccount = await this.sarosDLMM.getPairAccount(poolAddress);
       const activeBinId = pairAccount.activeId;
-      logger.debug("Retrieved pair account", { activeBinId });
 
-      // Validate bin IDs are valid
-      if (absoluteLowerBinId >= absoluteUpperBinId) {
+      logger.debug("Retrieved pair account", {
+        activeBinId,
+        lowerBinId,
+        upperBinId,
+      });
+
+      // Validate bin IDs
+      if (lowerBinId >= upperBinId) {
         throw new Error(
-          `Invalid bin range: lowerBinId (${absoluteLowerBinId}) must be less than upperBinId (${absoluteUpperBinId})`
+          `Invalid bin range: lowerBinId (${lowerBinId}) must be less than upperBinId (${upperBinId})`
         );
       }
 
-      // Calculate relative bin IDs from absolute bin IDs
-      const relativeBinIdLeft = absoluteLowerBinId - activeBinId;
-      const relativeBinIdRight = absoluteUpperBinId - activeBinId;
+      // Calculate relative bin IDs from active bin
+      const relativeBinIdLeft = lowerBinId - activeBinId;
+      const relativeBinIdRight = upperBinId - activeBinId;
 
       // Validate relative bin IDs are within acceptable range
-      // DLMM typically requires positions to be within certain bounds of active bin
       if (
         Math.abs(relativeBinIdLeft) > 1000 ||
         Math.abs(relativeBinIdRight) > 1000
       ) {
         throw new Error(
-          `Position too far from active bin. Active: ${activeBinId}, Lower: ${absoluteLowerBinId}, Upper: ${absoluteUpperBinId}`
+          `Position too far from active bin. Active: ${activeBinId}, Lower: ${lowerBinId}, Upper: ${upperBinId}`
         );
       }
 
-      // Calculate bin array index from the active bin ID
-      // The SDK expects the bin array that contains the active bin
-      const binArrayIndex = Math.floor(activeBinId / 70);
+      // Calculate bin array index - use the lower bin's array index
+      // Each bin array contains 70 bins
+      const binArrayIndex = Math.floor(lowerBinId / 70);
+      const upperBinArrayIndex = Math.floor(upperBinId / 70);
 
-      logger.info("Calculated relative bin IDs", {
+      logger.info("Calculated position parameters", {
         activeBinId,
-        absoluteLowerBinId,
-        absoluteUpperBinId,
+        lowerBinId,
+        upperBinId,
         relativeBinIdLeft,
         relativeBinIdRight,
         binArrayIndex,
-        lowerBinArrayIndex: Math.floor(absoluteLowerBinId / 70),
-        upperBinArrayIndex: Math.floor(absoluteUpperBinId / 70),
+        upperBinArrayIndex,
+        spansMultipleArrays: binArrayIndex !== upperBinArrayIndex,
+        totalBins: upperBinId - lowerBinId + 1,
       });
+
+      // Validate position doesn't span too many bins (max 140 bins per position)
+      const totalBins = upperBinId - lowerBinId + 1;
+      if (totalBins > 140) {
+        throw new Error(
+          `Position spans too many bins (${totalBins}). Maximum is 140 bins.`
+        );
+      }
+
+      // Log if position spans multiple bin arrays
+      if (binArrayIndex !== upperBinArrayIndex) {
+        logger.info(
+          "Position spans multiple bin arrays - SDK will handle initialization",
+          {
+            binArrayIndex,
+            upperBinArrayIndex,
+            totalArrays: upperBinArrayIndex - binArrayIndex + 1,
+          }
+        );
+      }
 
       // Generate a new position mint
       const positionMint = Keypair.generate();
       const transaction = new Transaction();
 
+      // Create position - SDK handles bin array initialization automatically
       await this.sarosDLMM.createPosition({
         pair: poolAddress,
         payer: walletPublicKey,
@@ -358,10 +458,16 @@ export class DLMMClient {
         .serialize({ requireAllSignatures: false })
         .toString("base64");
 
-      logger.info("Position creation transaction prepared", {
+      logger.info("Position creation transaction prepared successfully", {
         positionMint: positionMint.publicKey.toString(),
         blockhash,
+        lowerBinId,
+        upperBinId,
+        relativeBinIdLeft,
+        relativeBinIdRight,
+        binArrayIndex,
       });
+
       return {
         transaction: serializedTx,
         positionMint: positionMint.publicKey.toString(),
@@ -369,6 +475,7 @@ export class DLMMClient {
     } catch (error) {
       logger.error("Failed to prepare position creation transaction", {
         error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
       });
       throw error;
     }
@@ -826,7 +933,13 @@ export class DLMMClient {
 
   // Helper function to convert price to bin ID
   private priceToBinId(price: number, binStep: number): number {
-    return Math.floor(Math.log(price) / Math.log(1 + binStep / 10000));
+    // DLMM formula: binId = floor(log(price) / log(1 + binStep/10000)) + REFERENCE_BIN_ID
+    const REFERENCE_BIN_ID = 8388608;
+    const basisPoints = binStep / 10000;
+    const binId =
+      Math.floor(Math.log(price) / Math.log(1 + basisPoints)) +
+      REFERENCE_BIN_ID;
+    return binId;
   }
 
   // Calculate position value in USD

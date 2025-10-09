@@ -15,6 +15,16 @@ export function PositionCard({ position, onCollectFees, onRebalance }: PositionC
   const { pool, currentValue, feesEarned, performance, riskMetrics } = position;
   const isInRange = riskMetrics.isInRange;
 
+  console.log('[PositionCard] Rendering:', {
+    address: position.position.address,
+    pool: `${pool.tokenX.symbol}/${pool.tokenY.symbol}`,
+    currentValue,
+    feesTotal: feesEarned.total,
+    totalReturn: performance.totalReturn,
+    dailyYield: performance.dailyYield,
+    isInRange
+  });
+
   return (
     <Card>
       <CardHeader>
@@ -40,14 +50,14 @@ export function PositionCard({ position, onCollectFees, onRebalance }: PositionC
         {/* Performance */}
         <div className="flex justify-between items-center">
           <span className="text-sm text-gray-600">Total Return</span>
-          <span className={`font-semibold ${performance.totalReturn >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            {performance.totalReturn >= 0 ? '+' : ''}{performance.totalReturn.toFixed(2)}%
+          <span className={`font-semibold ${(performance.totalReturn ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            {(performance.totalReturn ?? 0) >= 0 ? '+' : ''}{(performance.totalReturn ?? 0).toFixed(2)}%
           </span>
         </div>
 
         <div className="flex justify-between items-center">
           <span className="text-sm text-gray-600">Daily Yield</span>
-          <span className="font-semibold">{performance.dailyYield.toFixed(2)}%</span>
+          <span className="font-semibold">{(performance.dailyYield ?? 0).toFixed(2)}%</span>
         </div>
 
         {/* Fees */}
@@ -100,11 +110,11 @@ export function PositionCard({ position, onCollectFees, onRebalance }: PositionC
           </div>
         )}
 
-        {performance.impermanentLoss > 10 && (
+        {(performance.impermanentLoss ?? 0) > 10 && (
           <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-md">
             <AlertTriangle className="h-4 w-4 text-red-600" />
             <span className="text-sm text-red-800">
-              High IL: {performance.impermanentLoss.toFixed(2)}%
+              High IL: {(performance.impermanentLoss ?? 0).toFixed(2)}%
             </span>
           </div>
         )}
