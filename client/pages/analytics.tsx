@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useWalletPositions } from '../hooks/use-wallet-positions';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -15,6 +16,37 @@ import {
 
 export default function Analytics() {
   const { data: positions } = useWalletPositions();
+  const [analyticsData, setAnalyticsData] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (positions && positions.length > 0) {
+      console.log('[Analytics] Positions loaded:', positions.length);
+      loadAnalytics();
+    }
+  }, [positions]);
+
+  const loadAnalytics = async () => {
+    setLoading(true);
+    try {
+      console.log('[Analytics] Loading analytics data...');
+      // Analytics data is calculated from positions
+      const totalValue = positions?.reduce((sum, pos) => sum + pos.currentValue, 0) || 0;
+      const totalFees = positions?.reduce((sum, pos) => sum + pos.feesEarned.total, 0) || 0;
+      
+      setAnalyticsData({
+        totalValue,
+        totalFees,
+        positionCount: positions?.length || 0,
+      });
+      
+      console.log('[Analytics] Analytics data loaded:', { totalValue, totalFees });
+    } catch (error) {
+      console.error('[Analytics] Failed to load analytics:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Generate mock data for charts
   const generateChartData = (): Array<{
@@ -44,8 +76,8 @@ export default function Analytics() {
 
   const chartData = generateChartData();
 
-  const totalValue = positions?.reduce((sum, pos) => sum + pos.currentValue, 0) || 0;
-  const totalFees = positions?.reduce((sum, pos) => sum + pos.feesEarned.total, 0) || 0;
+  const totalValue = analyticsData?.totalValue || 0;
+  const totalFees = analyticsData?.totalFees || 0;
 
   return (
     <div className="p-6 space-y-6">

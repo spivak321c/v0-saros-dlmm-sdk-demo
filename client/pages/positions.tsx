@@ -1,15 +1,24 @@
+import { useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletPositions } from '../hooks/use-wallet-positions';
 import { PositionCard } from '../components/position-card';
+import { PositionCreator } from '../components/position-creator';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Search } from 'lucide-react';
-import { useState } from 'react';
 
 export default function Positions() {
   const { publicKey } = useWallet();
-  const { data: positions, isLoading } = useWalletPositions();
+  const { data: positions, isLoading, refetch } = useWalletPositions();
   const [searchQuery, setSearchQuery] = useState('');
+  const [showCreatePosition, setShowCreatePosition] = useState(false);
+
+  console.log('[Positions] Render state:', { 
+    publicKey: publicKey?.toString(), 
+    positionsCount: positions?.length, 
+    isLoading,
+    searchQuery 
+  });
 
   const filteredPositions = positions?.filter((pos) =>
     pos.pool.tokenX.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -17,7 +26,13 @@ export default function Positions() {
     pos.position.address.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  console.log('[Positions] Filtered positions:', { 
+    total: positions?.length, 
+    filtered: filteredPositions?.length 
+  });
+
   if (!publicKey) {
+    console.log('[Positions] No wallet connected');
     return (
       <div className="flex items-center justify-center min-h-screen">
         <p className="text-gray-600">Connect wallet to view positions</p>
@@ -34,7 +49,7 @@ export default function Positions() {
             {positions?.length || 0} position{positions?.length !== 1 ? 's' : ''}
           </p>
         </div>
-        <Button>Create Position</Button>
+        <Button onClick={() => setShowCreatePosition(true)}>Create Position</Button>
       </div>
 
       {/* Search */}
@@ -65,6 +80,12 @@ export default function Positions() {
           ))}
         </div>
       )}
+
+      <PositionCreator
+        open={showCreatePosition}
+        onOpenChange={setShowCreatePosition}
+        onSuccess={() => refetch()}
+      />
     </div>
   );
 }

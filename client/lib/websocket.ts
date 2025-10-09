@@ -1,6 +1,18 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from "react";
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080';
+// Construct WebSocket URL from current location
+const getWsUrl = () => {
+  if (import.meta.env.VITE_WS_URL) {
+    return import.meta.env.VITE_WS_URL;
+  }
+
+  // Use current host for WebSocket connection
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const host = window.location.host;
+  return `${protocol}//${host}`;
+};
+
+const WS_URL = getWsUrl();
 
 export interface WebSocketMessage {
   type: string;
@@ -14,29 +26,35 @@ export function useWebSocket() {
   const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null);
 
   useEffect(() => {
+    console.log("[WebSocket] Connecting to:", WS_URL);
     const websocket = new WebSocket(WS_URL);
 
     websocket.onopen = () => {
-      console.log('WebSocket connected');
+      console.log("[WebSocket] Connected successfully");
       setConnected(true);
     };
 
     websocket.onclose = () => {
-      console.log('WebSocket disconnected');
+      console.log("[WebSocket] Disconnected");
       setConnected(false);
     };
 
     websocket.onerror = (error) => {
-      console.error('WebSocket error:', error);
+      console.error("[WebSocket] Error:", error);
       setConnected(false);
     };
 
     websocket.onmessage = (event) => {
       try {
         const message: WebSocketMessage = JSON.parse(event.data);
+        console.log(
+          "[WebSocket] Message received:",
+          message.type,
+          message.data
+        );
         setLastMessage(message);
       } catch (error) {
-        console.error('Failed to parse WebSocket message:', error);
+        console.error("[WebSocket] Failed to parse message:", error);
       }
     };
 
@@ -47,11 +65,17 @@ export function useWebSocket() {
     };
   }, []);
 
-  const send = useCallback((type: string, data: any) => {
-    if (ws && connected) {
-      ws.send(JSON.stringify({ type, data, timestamp: Date.now() }));
-    }
-  }, [ws, connected]);
+  const send = useCallback(
+    (type: string, data: any) => {
+      if (ws && connected) {
+        console.log("[WebSocket] Sending message:", type, data);
+        ws.send(JSON.stringify({ type, data, timestamp: Date.now() }));
+      } else {
+        console.warn("[WebSocket] Cannot send message - not connected");
+      }
+    },
+    [ws, connected]
+  );
 
   return { connected, lastMessage, send };
 }

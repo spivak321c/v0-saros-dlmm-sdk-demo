@@ -1,0 +1,22 @@
+{
+  "positions": {},
+  "rebalanceEvents": [],
+  "alerts": [],
+  "stopLossConfigs": {},
+  "settings": {
+    "telegram": {
+      "enabled": false,
+      "botToken": "",
+      "chatId": ""
+    },
+    "rebalancing": {
+      "enabled": true,
+      "intervalMinutes": 15,
+      "volatilityThreshold": 0.05
+    },
+    "monitoring": {
+      "enabled": false,
+      "pools": []
+    }
+  }
+}

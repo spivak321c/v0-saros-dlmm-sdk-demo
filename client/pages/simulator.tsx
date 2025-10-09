@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,11 +7,17 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 
 export default function Simulator() {
+  const navigate = useNavigate();
   const [lowerPrice, setLowerPrice] = useState(170);
   const [upperPrice, setUpperPrice] = useState(190);
   const [currentPrice] = useState(180);
   const [amount, setAmount] = useState(1000);
   const [volatility, setVolatility] = useState([50]);
+
+  const handleCreatePosition = () => {
+    console.log('[Simulator] Navigating to positions page to create position');
+    navigate('/positions');
+  };
 
   const calculateProjections = () => {
     const rangeWidth = ((upperPrice - lowerPrice) / currentPrice) * 100;
@@ -126,7 +133,7 @@ export default function Simulator() {
               <p className="text-sm text-gray-500 mb-4">
                 * Projections are estimates based on current market conditions and may vary
               </p>
-              <Button className="w-full">Create This Position</Button>
+              <Button className="w-full" onClick={handleCreatePosition}>Create This Position</Button>
             </div>
           </CardContent>
         </Card>

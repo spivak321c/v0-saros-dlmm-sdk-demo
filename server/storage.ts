@@ -1,107 +1,282 @@
-import type { PositionData, RebalanceEvent, Alert, VolatilityData } from '../shared/schema';
+import type {
+  PositionData,
+  RebalanceEvent,
+  Alert,
+  VolatilityData,
+  StopLossConfig,
+} from "../shared/schema";
+import fs from "fs";
+import path from "path";
 
-// In-memory storage (replace with database in production)
+const STORAGE_FILE = path.join(__dirname, "file.json");
+
+interface StorageData {
+  positions: Record<string, PositionData>;
+  rebalanceEvents: RebalanceEvent[];
+  alerts: Alert[];
+  stopLossConfigs: Record<string, StopLossConfig>;
+  settings: {
+    telegram: {
+      enabled: boolean;
+      botToken: string;
+      chatId: string;
+    };
+    rebalancing: {
+      enabled: boolean;
+      intervalMinutes: number;
+      volatilityThreshold: number;
+    };
+    monitoring: {
+      enabled: boolean;
+      pools: string[];
+    };
+  };
+}
+
+// In-memory storage with JSON file persistence
 class Storage {
-  private positions: Map<string, PositionData> = new Map();
-  private rebalanceEvents: RebalanceEvent[] = [];
-  private alerts: Alert[] = [];
+  private data: StorageData;
   private volatilityData: Map<string, VolatilityData> = new Map();
-  private priceHistory: Map<string, Array<{ price: number; timestamp: number }>> = new Map();
+  private priceHistory: Map<
+    string,
+    Array<{ price: number; timestamp: number }>
+  > = new Map();
   private initialPrices: Map<string, number> = new Map();
 
+  constructor() {
+    this.data = this.loadFromFile();
+  }
+
+  private loadFromFile(): StorageData {
+    try {
+      if (fs.existsSync(STORAGE_FILE)) {
+        const fileContent = fs.readFileSync(STORAGE_FILE, "utf-8");
+        return JSON.parse(fileContent);
+      }
+    } catch (error) {
+      console.error("Failed to load storage file:", error);
+    }
+    return {
+      positions: {},
+      rebalanceEvents: [],
+      alerts: [],
+      stopLossConfigs: {},
+      settings: {
+        telegram: { enabled: false, botToken: "", chatId: "" },
+        rebalancing: {
+          enabled: false,
+          intervalMinutes: 15,
+          volatilityThreshold: 0.05,
+        },
+        monitoring: { enabled: false, pools: [] },
+      },
+    };
+  }
+
+  private saveToFile() {
+    try {
+      fs.writeFileSync(
+        STORAGE_FILE,
+        JSON.stringify(this.data, null, 2),
+        "utf-8"
+      );
+    } catch (error) {
+      console.error("Failed to save storage file:", error);
+    }
+  }
+
   // Positions
-  setPosition(address: string, data: PositionData) {
-    this.positions.set(address, data);
+  public setPosition(address: string, data: PositionData) {
+    this.data.positions[address] = data;
+    this.saveToFile();
   }
 
-  getPosition(address: string): PositionData | undefined {
-    return this.positions.get(address);
+  public getPosition(address: string): PositionData | undefined {
+    return this.data.positions[address];
   }
 
-  getAllPositions(): PositionData[] {
-    return Array.from(this.positions.values());
+  public getAllPositions(): PositionData[] {
+    return Object.values(this.data.positions);
   }
 
-  getUserPositions(owner: string): PositionData[] {
-    return Array.from(this.positions.values()).filter(
+  public getUserPositions(owner: string): PositionData[] {
+    return Object.values(this.data.positions).filter(
       (pos) => pos.position.owner === owner
     );
   }
 
-  deletePosition(address: string) {
-    this.positions.delete(address);
+  public deletePosition(address: string) {
+    delete this.data.positions[address];
+    this.saveToFile();
   }
 
   // Rebalance events
-  addRebalanceEvent(event: RebalanceEvent) {
-    this.rebalanceEvents.push(event);
+  public addRebalanceEvent(event: RebalanceEvent) {
+    this.data.rebalanceEvents.push(event);
+    this.saveToFile();
   }
 
-  getRebalanceEvents(positionAddress?: string): RebalanceEvent[] {
+  public getRebalanceEvents(positionAddress?: string): RebalanceEvent[] {
     if (positionAddress) {
-      return this.rebalanceEvents.filter((e) => e.positionAddress === positionAddress);
+      return this.data.rebalanceEvents.filter(
+        (e) => e.positionAddress === positionAddress
+      );
     }
-    return this.rebalanceEvents;
+    return this.data.rebalanceEvents;
   }
 
   // Alerts
-  addAlert(alert: Alert) {
-    this.alerts.push(alert);
+  public addAlert(alert: Alert) {
+    this.data.alerts.push(alert);
+    this.saveToFile();
   }
 
-  getAlerts(unreadOnly = false): Alert[] {
+  public getAlerts(unreadOnly: boolean = false): Alert[] {
     if (unreadOnly) {
-      return this.alerts.filter((a) => !a.read);
+      return this.data.alerts.filter((a) => !a.read);
     }
-    return this.alerts;
+    return this.data.alerts;
   }
 
-  markAlertRead(id: string) {
-    const alert = this.alerts.find((a) => a.id === id);
+  public markAlertRead(id: string) {
+    const alert = this.data.alerts.find((a) => a.id === id);
     if (alert) {
       alert.read = true;
+      this.saveToFile();
     }
   }
 
-  // Volatility data
-  setVolatilityData(poolAddress: string, data: VolatilityData) {
+  // Stop-loss configs
+  public setStopLoss(config: StopLossConfig) {
+    this.data.stopLossConfigs[config.positionAddress] = config;
+    this.saveToFile();
+  }
+
+  public getStopLoss(positionAddress: string): StopLossConfig | undefined {
+    return this.data.stopLossConfigs[positionAddress];
+  }
+
+  public removeStopLoss(positionAddress: string) {
+    delete this.data.stopLossConfigs[positionAddress];
+    this.saveToFile();
+  }
+
+  public getAllStopLossConfigs(): StopLossConfig[] {
+    return Object.values(this.data.stopLossConfigs);
+  }
+
+  // Settings management
+  public getSettings() {
+    // Return flattened settings for frontend compatibility
+    return {
+      autoRebalance: this.data.settings.rebalancing?.enabled || false,
+      rebalanceThreshold: this.data.settings.rebalancing?.volatilityThreshold
+        ? this.data.settings.rebalancing.volatilityThreshold * 100
+        : 5,
+      autoCollectFees: true,
+      feeThreshold: 10,
+      stopLossEnabled: false,
+      stopLossThreshold: 10,
+      telegram: this.data.settings.telegram,
+      rebalancing: this.data.settings.rebalancing,
+      monitoring: this.data.settings.monitoring,
+    };
+  }
+
+  public updateSettings(settings: Partial<StorageData["settings"]>) {
+    this.data.settings = { ...this.data.settings, ...settings };
+    this.saveToFile();
+  }
+
+  public saveSettings(settings: any) {
+    // Handle both flat and nested settings from frontend
+    if (settings.autoRebalance !== undefined) {
+      this.data.settings.rebalancing.enabled = settings.autoRebalance;
+    }
+    if (settings.rebalanceThreshold !== undefined) {
+      this.data.settings.rebalancing.volatilityThreshold =
+        settings.rebalanceThreshold / 100;
+    }
+    if (settings.autoCollectFees !== undefined) {
+      // Store in settings for future use
+    }
+    if (settings.feeThreshold !== undefined) {
+      // Store in settings for future use
+    }
+    if (settings.stopLossEnabled !== undefined) {
+      // Store in settings for future use
+    }
+    if (settings.stopLossThreshold !== undefined) {
+      // Store in settings for future use
+    }
+    // Merge any nested settings objects
+    if (settings.telegram) {
+      this.data.settings.telegram = {
+        ...this.data.settings.telegram,
+        ...settings.telegram,
+      };
+    }
+    if (settings.rebalancing) {
+      this.data.settings.rebalancing = {
+        ...this.data.settings.rebalancing,
+        ...settings.rebalancing,
+      };
+    }
+    if (settings.monitoring) {
+      this.data.settings.monitoring = {
+        ...this.data.settings.monitoring,
+        ...settings.monitoring,
+      };
+    }
+    this.saveToFile();
+  }
+
+  public getTelegramSettings() {
+    return this.data.settings.telegram;
+  }
+
+  public updateTelegramSettings(
+    telegram: Partial<StorageData["settings"]["telegram"]>
+  ) {
+    this.data.settings.telegram = {
+      ...this.data.settings.telegram,
+      ...telegram,
+    };
+    this.saveToFile();
+  }
+
+  // Volatility data (in-memory only)
+  public setVolatilityData(poolAddress: string, data: VolatilityData) {
     this.volatilityData.set(poolAddress, data);
   }
 
-  getVolatilityData(poolAddress: string): VolatilityData | undefined {
+  public getVolatilityData(poolAddress: string): VolatilityData | undefined {
     return this.volatilityData.get(poolAddress);
   }
 
-  // Price history
-  addPricePoint(poolAddress: string, price: number, timestamp: number) {
+  // Price history (in-memory only)
+  public addPricePoint(poolAddress: string, price: number, timestamp: number) {
     if (!this.priceHistory.has(poolAddress)) {
       this.priceHistory.set(poolAddress, []);
     }
-    const history = this.priceHistory.get(poolAddress)!;
-    history.push({ price, timestamp });
-    
-    // Keep only last 1000 points
-    if (history.length > 1000) {
-      history.shift();
-    }
+    this.priceHistory.get(poolAddress)!.push({ price, timestamp });
   }
 
-  getPriceHistory(poolAddress: string, since?: number): Array<{ price: number; timestamp: number }> {
-    const history = this.priceHistory.get(poolAddress) || [];
-    if (since) {
-      return history.filter((p) => p.timestamp >= since);
-    }
-    return history;
+  public getPriceHistory(
+    poolAddress: string
+  ): Array<{ price: number; timestamp: number }> {
+    return this.priceHistory.get(poolAddress) || [];
   }
 
-  // Initial price tracking for IL calculation
-  setInitialPrice(positionAddress: string, price: number) {
+  // Initial prices (in-memory only)
+  public setInitialPrice(positionAddress: string, price: number) {
     this.initialPrices.set(positionAddress, price);
   }
 
-  getInitialPrice(positionAddress: string): number | undefined {
+  public getInitialPrice(positionAddress: string): number | undefined {
     return this.initialPrices.get(positionAddress);
   }
 }
 
 export const storage = new Storage();
+export default storage;

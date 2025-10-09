@@ -1,15 +1,18 @@
-import { storage } from '../storage';
-import { dlmmClient } from '../solana/dlmm-client';
-import { PublicKey } from '@solana/web3.js';
-import type { VolatilityData } from '../../shared/schema';
+import { storage } from "../storage";
+import { dlmmClient } from "../solana/dlmm-client";
+import { PublicKey } from "@solana/web3.js";
+import type { VolatilityData } from "../../shared/schema";
 
 export class VolatilityTracker {
   private trackingInterval: NodeJS.Timeout | null = null;
   private readonly UPDATE_INTERVAL = 60000; // 1 minute
 
-  calculateVolatility(poolAddress: string, timeframe: number = 86400000): number {
-    const priceHistory = storage.getPriceHistory(poolAddress, Date.now() - timeframe);
-    
+  calculateVolatility(
+    poolAddress: string,
+    timeframe: number = 86400000
+  ): number {
+    const priceHistory = storage.getPriceHistory(poolAddress);
+
     if (priceHistory.length < 2) {
       return 0;
     }
@@ -17,13 +20,17 @@ export class VolatilityTracker {
     // Calculate returns
     const returns: number[] = [];
     for (let i = 1; i < priceHistory.length; i++) {
-      const returnValue = Math.log(priceHistory[i].price / priceHistory[i - 1].price);
+      const returnValue = Math.log(
+        priceHistory[i].price / priceHistory[i - 1].price
+      );
       returns.push(returnValue);
     }
 
     // Calculate standard deviation
     const mean = returns.reduce((sum, r) => sum + r, 0) / returns.length;
-    const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;
+    const variance =
+      returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) /
+      returns.length;
     const stdDev = Math.sqrt(variance);
 
     // Annualize volatility
@@ -34,15 +41,15 @@ export class VolatilityTracker {
   }
 
   calculatePriceChange(poolAddress: string, timeframe: number): number {
-    const priceHistory = storage.getPriceHistory(poolAddress, Date.now() - timeframe);
-    
+    const priceHistory = storage.getPriceHistory(poolAddress);
+
     if (priceHistory.length < 2) {
       return 0;
     }
 
     const oldestPrice = priceHistory[0].price;
     const latestPrice = priceHistory[priceHistory.length - 1].price;
-    
+
     return ((latestPrice - oldestPrice) / oldestPrice) * 100;
   }
 
@@ -57,7 +64,7 @@ export class VolatilityTracker {
       const poolInfo = await dlmmClient.getPoolInfo(new PublicKey(poolAddress));
       volume24h = poolInfo.volume24h;
     } catch (error) {
-      console.error('Failed to fetch pool volume:', error);
+      console.error("Failed to fetch pool volume:", error);
     }
 
     const volatilityData: VolatilityData = {
@@ -89,14 +96,18 @@ export class VolatilityTracker {
       }
     }, this.UPDATE_INTERVAL);
 
-    console.log('Volatility tracking started for', poolAddresses.length, 'pools');
+    console.log(
+      "Volatility tracking started for",
+      poolAddresses.length,
+      "pools"
+    );
   }
 
   stopTracking() {
     if (this.trackingInterval) {
       clearInterval(this.trackingInterval);
       this.trackingInterval = null;
-      console.log('Volatility tracking stopped');
+      console.log("Volatility tracking stopped");
     }
   }
 

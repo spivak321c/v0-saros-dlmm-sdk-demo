@@ -2,6 +2,7 @@ import { PublicKey } from '@solana/web3.js';
 import { dlmmClient } from '../solana/dlmm-client';
 import { storage } from '../storage';
 import { ilCalculator } from '../utils/il-calculator';
+import { logger } from '../utils/logger';
 import type { PositionData } from '../../shared/schema';
 
 export class PositionMonitor {
@@ -10,8 +11,12 @@ export class PositionMonitor {
 
   async loadPositionData(positionAddress: string): Promise<PositionData | null> {
     try {
+      logger.debug('Loading position data', { positionAddress });
       const position = await dlmmClient.getPositionInfo(new PublicKey(positionAddress));
-      if (!position) return null;
+      if (!position) {
+        logger.warn('Position not found', { positionAddress });
+        return null;
+      }
 
       const pool = await dlmmClient.getPoolInfo(new PublicKey(position.poolAddress));
       if (!pool) return null;
@@ -74,28 +79,33 @@ export class PositionMonitor {
       };
 
       storage.setPosition(positionAddress, positionData);
+      logger.info('Position data loaded successfully', { positionAddress, currentValue, isInRange });
       return positionData;
     } catch (error) {
-      console.error(`Failed to load position ${positionAddress}:`, error);
+      logger.error('Failed to load position data', { positionAddress, error: error instanceof Error ? error.message : String(error) });
       return null;
     }
   }
 
   async loadUserPositions(walletAddress: string): Promise<PositionData[]> {
     try {
+      logger.info('Loading user positions', { walletAddress });
       const positions = await dlmmClient.getUserPositions(new PublicKey(walletAddress));
+      logger.info('Retrieved positions from DLMM client', { walletAddress, count: positions.length });
       const positionsData: PositionData[] = [];
 
       for (const position of positions) {
+        logger.debug('Loading position data for position', { positionAddress: position.address });
         const data = await this.loadPositionData(position.address);
         if (data) {
           positionsData.push(data);
         }
       }
 
+      logger.info('User positions loaded successfully', { walletAddress, totalPositions: positionsData.length });
       return positionsData;
     } catch (error) {
-      console.error('Failed to load user positions:', error);
+      logger.error('Failed to load user positions', { walletAddress, error: error instanceof Error ? error.message : String(error) });
       return [];
     }
   }
@@ -105,20 +115,22 @@ export class PositionMonitor {
       clearInterval(this.monitoringInterval);
     }
 
+    logger.info('Starting position monitoring', { walletCount: walletAddresses.length, intervalMs: this.UPDATE_INTERVAL });
     this.monitoringInterval = setInterval(async () => {
+      logger.debug('Running position monitoring cycle');
       for (const address of walletAddresses) {
         await this.loadUserPositions(address);
       }
     }, this.UPDATE_INTERVAL);
 
-    console.log('Position monitoring started');
+    logger.info('Position monitoring started successfully');
   }
 
   stopMonitoring() {
     if (this.monitoringInterval) {
       clearInterval(this.monitoringInterval);
       this.monitoringInterval = null;
-      console.log('Position monitoring stopped');
+      logger.info('Position monitoring stopped');
     }
   }
 

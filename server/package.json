@@ -23,6 +23,8 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@metaplex-foundation/mpl-token-metadata": "^3.4.0",
+    "@solana/spl-token": "^0.4.14",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
     "bn.js": "^5.2.1",

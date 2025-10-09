@@ -1,7 +1,9 @@
-import { Connection, PublicKey, Keypair, Transaction } from '@solana/web3.js';
-import { getConnection } from './connection';
-import type { PoolInfo, Position } from '../../shared/schema';
-import { LiquidityBookServices, MODE } from '@saros-finance/dlmm-sdk';
+import { Connection, PublicKey, Keypair, Transaction } from "@solana/web3.js";
+import { getConnection } from "./connection";
+import type { PoolInfo, Position } from "../../shared/schema";
+import { LiquidityBookServices, MODE } from "@saros-finance/dlmm-sdk";
+import { logger } from "../utils/logger";
+import { getMint } from "@solana/spl-token";
 
 export class DLMMClient {
   private connection: Connection;
@@ -9,40 +11,113 @@ export class DLMMClient {
 
   constructor() {
     this.connection = getConnection();
+    logger.info("Initializing DLMM client", {
+      mode: "DEVNET",
+      rpcUrl: this.connection.rpcEndpoint,
+    });
     this.sarosDLMM = new LiquidityBookServices({
-      mode: MODE.MAINNET,
+      mode: MODE.DEVNET,
       options: {
         rpcUrl: this.connection.rpcEndpoint,
       },
     });
+    logger.info("DLMM client initialized successfully");
+  }
+
+  async getTokenSymbol(mintAddress: string): Promise<string> {
+    try {
+      const mint = new PublicKey(mintAddress);
+
+      // Try to get token metadata from Metaplex
+      try {
+        const TOKEN_METADATA_PROGRAM_ID = new PublicKey(
+          "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+        );
+        const metadataPDA = PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("metadata"),
+            TOKEN_METADATA_PROGRAM_ID.toBuffer(),
+            mint.toBuffer(),
+          ],
+          TOKEN_METADATA_PROGRAM_ID
+        )[0];
+
+        const accountInfo = await this.connection.getAccountInfo(metadataPDA);
+        if (accountInfo && accountInfo.data.length > 0) {
+          // Parse metadata manually - simple extraction of symbol
+          const data = accountInfo.data;
+          // Metadata layout: key (1) + update_authority (32) + mint (32) + name (4 + len) + symbol (4 + len) + ...
+          let offset = 1 + 32 + 32; // Skip key, update_authority, mint
+
+          // Skip name
+          const nameLen = data.readUInt32LE(offset);
+          offset += 4 + nameLen;
+
+          // Read symbol
+          const symbolLen = data.readUInt32LE(offset);
+          offset += 4;
+          const symbol = data
+            .slice(offset, offset + symbolLen)
+            .toString("utf8")
+            .replace(/\0/g, "")
+            .trim();
+
+          if (symbol) {
+            return symbol;
+          }
+        }
+      } catch (e) {
+        // Metadata not found or parsing failed
+      }
+
+      // Fallback: use shortened mint address
+      return mintAddress.slice(0, 4) + "..." + mintAddress.slice(-4);
+    } catch (error) {
+      logger.warn("Failed to fetch token symbol", {
+        mint: mintAddress,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return "Unknown";
+    }
   }
 
   async getPoolInfo(poolAddress: PublicKey): Promise<PoolInfo> {
     try {
+      logger.debug("Fetching pool info", {
+        poolAddress: poolAddress.toString(),
+      });
       // Fetch pool metadata using the SDK
-      const metadata = await this.sarosDLMM.fetchPoolMetadata(poolAddress.toString());
-      
+      const metadata = await this.sarosDLMM.fetchPoolMetadata(
+        poolAddress.toString()
+      );
+
       if (!metadata) {
-        throw new Error('Pool not found');
+        throw new Error("Pool not found");
       }
 
       // Get pair account for detailed state
       const pairAccount = await this.sarosDLMM.getPairAccount(poolAddress);
-      
+
       // Calculate current price from active bin
       const activeBinId = pairAccount.activeId;
       const currentPrice = this.binIdToPrice(activeBinId, pairAccount.binStep);
-      
-      return {
+
+      // Fetch token symbols
+      const [tokenXSymbol, tokenYSymbol] = await Promise.all([
+        this.getTokenSymbol(metadata.baseMint),
+        this.getTokenSymbol(metadata.quoteMint),
+      ]);
+
+      const poolInfo = {
         address: poolAddress.toString(),
         tokenX: {
           mint: metadata.baseMint,
-          symbol: 'Unknown',
+          symbol: tokenXSymbol,
           decimals: metadata.extra.tokenBaseDecimal,
         },
         tokenY: {
           mint: metadata.quoteMint,
-          symbol: 'Unknown',
+          symbol: tokenYSymbol,
           decimals: metadata.extra.tokenQuoteDecimal,
         },
         binStep: pairAccount.binStep,
@@ -52,27 +127,56 @@ export class DLMMClient {
         volume24h: 0,
         fees24h: 0,
       };
+      logger.debug("Pool info fetched successfully", {
+        poolAddress: poolAddress.toString(),
+        activeId: pairAccount.activeId,
+        tokenX: tokenXSymbol,
+        tokenY: tokenYSymbol,
+        currentPrice,
+      });
+      return poolInfo;
     } catch (error) {
-      console.error('Failed to fetch pool info:', error);
+      logger.error("Failed to fetch pool info", {
+        poolAddress: poolAddress.toString(),
+        error: error instanceof Error ? error.message : String(error),
+      });
       throw error;
     }
   }
 
+  private async delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
   async getUserPositions(walletAddress: PublicKey): Promise<Position[]> {
     try {
-      // Get all pool addresses first
+      logger.debug("Fetching user positions", {
+        wallet: walletAddress.toString(),
+      });
+
+      // Get all pool addresses - limit to first 20 to avoid rate limits
       const poolAddresses = await this.sarosDLMM.fetchPoolAddresses();
+      const limitedPools = poolAddresses.slice(0, 20);
+      logger.debug("Checking pools for user positions", {
+        wallet: walletAddress.toString(),
+        poolCount: limitedPools.length,
+      });
+
       const allPositions: Position[] = [];
-      
-      // Query positions for each pool
-      for (const poolAddr of poolAddresses.slice(0, 10)) { // Limit to first 10 pools for performance
+
+      // Query pools sequentially with delay to avoid rate limits
+      for (const poolAddr of limitedPools) {
         try {
           const positions = await this.sarosDLMM.getUserPositions({
             payer: walletAddress,
-            pair: new PublicKey(poolAddr)
+            pair: new PublicKey(poolAddr),
           });
-          
+
           if (positions && positions.length > 0) {
+            logger.debug("Found positions in pool", {
+              poolAddress: poolAddr,
+              count: positions.length,
+            });
             for (const position of positions) {
               allPositions.push({
                 address: position.publicKey.toString(),
@@ -80,54 +184,193 @@ export class DLMMClient {
                 owner: walletAddress.toString(),
                 lowerBinId: position.lowerBinId || 0,
                 upperBinId: position.upperBinId || 0,
-                liquidityX: position.totalXAmount?.toString() || '0',
-                liquidityY: position.totalYAmount?.toString() || '0',
-                feeX: position.feeX?.toString() || '0',
-                feeY: position.feeY?.toString() || '0',
-                rewardOne: position.rewardOne?.toString() || '0',
-                rewardTwo: position.rewardTwo?.toString() || '0',
+                liquidityX: position.totalXAmount?.toString() || "0",
+                liquidityY: position.totalYAmount?.toString() || "0",
+                feeX: position.feeX?.toString() || "0",
+                feeY: position.feeY?.toString() || "0",
+                rewardOne: position.rewardOne?.toString() || "0",
+                rewardTwo: position.rewardTwo?.toString() || "0",
                 lastUpdatedAt: position.lastUpdatedAt || Date.now(),
                 createdAt: position.lastUpdatedAt || Date.now(),
               });
             }
           }
+
+          // Add 200ms delay between requests to avoid rate limits
+          await this.delay(200);
         } catch (err) {
           // Skip pools where user has no positions or errors occur
+          logger.debug("Skipping pool", { poolAddress: poolAddr });
           continue;
         }
       }
-      
+
+      logger.info("User positions fetched", {
+        wallet: walletAddress.toString(),
+        totalPositions: allPositions.length,
+      });
       return allPositions;
     } catch (error) {
-      console.error('Failed to fetch user positions:', error);
+      logger.error("Failed to fetch user positions", {
+        wallet: walletAddress.toString(),
+        error: error instanceof Error ? error.message : String(error),
+      });
       return [];
     }
   }
 
   async getPositionInfo(positionAddress: PublicKey): Promise<Position | null> {
     try {
-      const positionAccount = await this.sarosDLMM.getPositionAccount(positionAddress);
-      
+      logger.debug("Fetching position info", {
+        positionAddress: positionAddress.toString(),
+      });
+      const positionAccount =
+        await this.sarosDLMM.getPositionAccount(positionAddress);
+
       if (!positionAccount) return null;
-      
-      return {
+
+      const position = {
         address: positionAddress.toString(),
         poolAddress: positionAccount.lbPair.toString(),
         owner: positionAccount.owner.toString(),
         lowerBinId: positionAccount.lowerBinId || 0,
         upperBinId: positionAccount.upperBinId || 0,
-        liquidityX: positionAccount.totalXAmount?.toString() || '0',
-        liquidityY: positionAccount.totalYAmount?.toString() || '0',
-        feeX: positionAccount.feeX?.toString() || '0',
-        feeY: positionAccount.feeY?.toString() || '0',
-        rewardOne: positionAccount.rewardOne?.toString() || '0',
-        rewardTwo: positionAccount.rewardTwo?.toString() || '0',
+        liquidityX: positionAccount.totalXAmount?.toString() || "0",
+        liquidityY: positionAccount.totalYAmount?.toString() || "0",
+        feeX: positionAccount.feeX?.toString() || "0",
+        feeY: positionAccount.feeY?.toString() || "0",
+        rewardOne: positionAccount.rewardOne?.toString() || "0",
+        rewardTwo: positionAccount.rewardTwo?.toString() || "0",
         lastUpdatedAt: positionAccount.lastUpdatedAt || Date.now(),
         createdAt: positionAccount.lastUpdatedAt || Date.now(),
       };
+      logger.debug("Position info fetched", {
+        positionAddress: positionAddress.toString(),
+        poolAddress: position.poolAddress,
+      });
+      return position;
     } catch (error) {
-      console.error('Failed to fetch position info:', error);
+      logger.error("Failed to fetch position info", {
+        positionAddress: positionAddress.toString(),
+        error: error instanceof Error ? error.message : String(error),
+      });
       return null;
+    }
+  }
+
+  async getPoolAddresses(): Promise<string[]> {
+    try {
+      logger.debug("Fetching pool addresses");
+      const addresses = await this.sarosDLMM.fetchPoolAddresses();
+      logger.info("Pool addresses fetched", { count: addresses.length });
+      return addresses;
+    } catch (error) {
+      logger.error("Failed to fetch pool addresses", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
+
+  async prepareCreatePositionTransaction(
+    poolAddress: PublicKey,
+    absoluteLowerBinId: number,
+    absoluteUpperBinId: number,
+    amountX: string,
+    amountY: string,
+    walletPublicKey: PublicKey
+  ): Promise<{ transaction: string; positionMint: string }> {
+    try {
+      logger.info("Preparing position creation transaction", {
+        poolAddress: poolAddress.toString(),
+        absoluteLowerBinId,
+        absoluteUpperBinId,
+        amountX,
+        amountY,
+      });
+      // Get active bin ID to calculate relative positions
+      const pairAccount = await this.sarosDLMM.getPairAccount(poolAddress);
+      const activeBinId = pairAccount.activeId;
+      logger.debug("Retrieved pair account", { activeBinId });
+
+      // Validate bin IDs are valid
+      if (absoluteLowerBinId >= absoluteUpperBinId) {
+        throw new Error(
+          `Invalid bin range: lowerBinId (${absoluteLowerBinId}) must be less than upperBinId (${absoluteUpperBinId})`
+        );
+      }
+
+      // Calculate relative bin IDs from absolute bin IDs
+      const relativeBinIdLeft = absoluteLowerBinId - activeBinId;
+      const relativeBinIdRight = absoluteUpperBinId - activeBinId;
+
+      // Validate relative bin IDs are within acceptable range
+      // DLMM typically requires positions to be within certain bounds of active bin
+      if (
+        Math.abs(relativeBinIdLeft) > 1000 ||
+        Math.abs(relativeBinIdRight) > 1000
+      ) {
+        throw new Error(
+          `Position too far from active bin. Active: ${activeBinId}, Lower: ${absoluteLowerBinId}, Upper: ${absoluteUpperBinId}`
+        );
+      }
+
+      // Calculate bin array index from the active bin ID
+      // The SDK expects the bin array that contains the active bin
+      const binArrayIndex = Math.floor(activeBinId / 70);
+
+      logger.info("Calculated relative bin IDs", {
+        activeBinId,
+        absoluteLowerBinId,
+        absoluteUpperBinId,
+        relativeBinIdLeft,
+        relativeBinIdRight,
+        binArrayIndex,
+        lowerBinArrayIndex: Math.floor(absoluteLowerBinId / 70),
+        upperBinArrayIndex: Math.floor(absoluteUpperBinId / 70),
+      });
+
+      // Generate a new position mint
+      const positionMint = Keypair.generate();
+      const transaction = new Transaction();
+
+      await this.sarosDLMM.createPosition({
+        pair: poolAddress,
+        payer: walletPublicKey,
+        relativeBinIdLeft,
+        relativeBinIdRight,
+        binArrayIndex,
+        positionMint: positionMint.publicKey,
+        transaction,
+      });
+
+      // Get recent blockhash and set fee payer
+      const { blockhash, lastValidBlockHeight } =
+        await this.connection.getLatestBlockhash("finalized");
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = walletPublicKey;
+
+      // Add position mint as partial signer (needs to be signed on client side too)
+      transaction.partialSign(positionMint);
+
+      // Serialize transaction for client signing
+      const serializedTx = transaction
+        .serialize({ requireAllSignatures: false })
+        .toString("base64");
+
+      logger.info("Position creation transaction prepared", {
+        positionMint: positionMint.publicKey.toString(),
+        blockhash,
+      });
+      return {
+        transaction: serializedTx,
+        positionMint: positionMint.publicKey.toString(),
+      };
+    } catch (error) {
+      logger.error("Failed to prepare position creation transaction", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
     }
   }
 
@@ -140,17 +383,26 @@ export class DLMMClient {
     wallet: Keypair
   ): Promise<string> {
     try {
+      logger.info("Creating position", {
+        poolAddress: poolAddress.toString(),
+        lowerBinId,
+        upperBinId,
+        amountX,
+        amountY,
+      });
       // Calculate relative bin IDs from the active bin
       const pairAccount = await this.sarosDLMM.getPairAccount(poolAddress);
       const activeBinId = pairAccount.activeId;
+      logger.debug("Retrieved pair account", { activeBinId });
       const relativeBinIdLeft = lowerBinId - activeBinId;
       const relativeBinIdRight = upperBinId - activeBinId;
+      // Calculate bin array index from the active bin ID
       const binArrayIndex = Math.floor(activeBinId / 70);
-      
+
       // Generate a new position mint
       const positionMint = Keypair.generate();
       const transaction = new Transaction();
-      
+
       const result = await this.sarosDLMM.createPosition({
         pair: poolAddress,
         payer: wallet.publicKey,
@@ -163,7 +415,9 @@ export class DLMMClient {
 
       return result.position;
     } catch (error) {
-      console.error('Failed to create position:', error);
+      logger.error("Failed to create position", {
+        error: error instanceof Error ? error.message : String(error),
+      });
       throw error;
     }
   }
@@ -176,14 +430,18 @@ export class DLMMClient {
   ): Promise<string> {
     try {
       // Get position mint from position info
-      const positionAccount = await this.sarosDLMM.getPositionAccount(new PublicKey(positionInfo.address));
-      const pairAccount = await this.sarosDLMM.getPairAccount(new PublicKey(positionInfo.poolAddress));
+      const positionAccount = await this.sarosDLMM.getPositionAccount(
+        new PublicKey(positionInfo.address)
+      );
+      const pairAccount = await this.sarosDLMM.getPairAccount(
+        new PublicKey(positionInfo.poolAddress)
+      );
       const activeBinId = pairAccount.activeId;
-      
+
       // Calculate bin array indices
       const binArrayLowerIndex = Math.floor(positionInfo.lowerBinId / 70);
       const binArrayUpperIndex = Math.floor(positionInfo.upperBinId / 70);
-      
+
       // Get bin array addresses
       const binArrayLower = await this.sarosDLMM.getBinArray({
         pair: new PublicKey(positionInfo.poolAddress),
@@ -193,17 +451,21 @@ export class DLMMClient {
         pair: new PublicKey(positionInfo.poolAddress),
         binArrayIndex: binArrayUpperIndex,
       });
-      
+
       // Create liquidity distribution
       const liquidityDistribution = [];
-      for (let binId = positionInfo.lowerBinId; binId <= positionInfo.upperBinId; binId++) {
+      for (
+        let binId = positionInfo.lowerBinId;
+        binId <= positionInfo.upperBinId;
+        binId++
+      ) {
         liquidityDistribution.push({
           relativeBinId: binId - activeBinId,
           distributionX: 50,
           distributionY: 50,
         });
       }
-      
+
       const transaction = new Transaction();
       await this.sarosDLMM.addLiquidityIntoPosition({
         positionMint: positionAccount.positionMint,
@@ -216,10 +478,10 @@ export class DLMMClient {
         binArrayLower,
         binArrayUpper,
       });
-      
-      return transaction.signature?.toString() || 'success';
+
+      return transaction.signature?.toString() || "success";
     } catch (error) {
-      console.error('Failed to add liquidity:', error);
+      console.error("Failed to add liquidity:", error);
       throw error;
     }
   }
@@ -230,58 +492,67 @@ export class DLMMClient {
     wallet: Keypair
   ): Promise<string> {
     try {
-      const positionAccount = await this.sarosDLMM.getPositionAccount(new PublicKey(positionInfo.address));
-      const pairAccount = await this.sarosDLMM.getPairAccount(new PublicKey(positionInfo.poolAddress));
-      
+      const positionAccount = await this.sarosDLMM.getPositionAccount(
+        new PublicKey(positionInfo.address)
+      );
+      const pairAccount = await this.sarosDLMM.getPairAccount(
+        new PublicKey(positionInfo.poolAddress)
+      );
+
       const result = await this.sarosDLMM.removeMultipleLiquidity({
-        maxPositionList: [{
-          position: positionInfo.address,
-          start: positionInfo.lowerBinId,
-          end: positionInfo.upperBinId,
-          positionMint: positionAccount.positionMint.toString(),
-        }],
+        maxPositionList: [
+          {
+            position: positionInfo.address,
+            start: positionInfo.lowerBinId,
+            end: positionInfo.upperBinId,
+            positionMint: positionAccount.positionMint.toString(),
+          },
+        ],
         payer: wallet.publicKey,
-        type: 'removeBoth',
+        type: "removeBoth",
         pair: new PublicKey(positionInfo.poolAddress),
         tokenMintX: pairAccount.tokenMintX,
         tokenMintY: pairAccount.tokenMintY,
         activeId: pairAccount.activeId,
       });
-      
-      return result.txs[0]?.signature?.toString() || 'success';
+
+      return result.txs[0]?.signature?.toString() || "success";
     } catch (error) {
-      console.error('Failed to remove liquidity:', error);
+      console.error("Failed to remove liquidity:", error);
       throw error;
     }
   }
 
-  async claimFees(
-    positionInfo: Position,
-    wallet: Keypair
-  ): Promise<string> {
+  async claimFees(positionInfo: Position, wallet: Keypair): Promise<string> {
     try {
-      const positionAccount = await this.sarosDLMM.getPositionAccount(new PublicKey(positionInfo.address));
-      const pairAccount = await this.sarosDLMM.getPairAccount(new PublicKey(positionInfo.poolAddress));
-      
+      const positionAccount = await this.sarosDLMM.getPositionAccount(
+        new PublicKey(positionInfo.address)
+      );
+      const pairAccount = await this.sarosDLMM.getPairAccount(
+        new PublicKey(positionInfo.poolAddress)
+      );
+
       // Claim fees by removing liquidity with type 'removeBoth'
       const result = await this.sarosDLMM.removeMultipleLiquidity({
-        maxPositionList: [{
-          position: positionInfo.address,
-          start: positionInfo.lowerBinId,
-          end: positionInfo.upperBinId,
-          positionMint: positionAccount.positionMint.toString(),
-        }],
+        maxPositionList: [
+          {
+            position: positionInfo.address,
+            start: positionInfo.lowerBinId,
+            end: positionInfo.upperBinId,
+            positionMint: positionAccount.positionMint.toString(),
+          },
+        ],
         payer: wallet.publicKey,
-        type: 'removeBoth',
+        type: "removeBoth",
         pair: new PublicKey(positionInfo.poolAddress),
         tokenMintX: pairAccount.tokenMintX,
         tokenMintY: pairAccount.tokenMintY,
         activeId: pairAccount.activeId,
       });
-      
-      return result.txs[0]?.signature?.toString() || 'success';
+
+      return result.txs[0]?.signature?.toString() || "success";
     } catch (error) {
-      console.error('Failed to claim fees:', error);
+      console.error("Failed to claim fees:", error);
       throw error;
     }
   }
@@ -289,41 +560,44 @@ export class DLMMClient {
   async getActiveBin(poolAddress: PublicKey): Promise<any> {
     try {
       const pairAccount = await this.sarosDLMM.getPairAccount(poolAddress);
-      
+
       if (!pairAccount) {
-        throw new Error('Pool not found');
+        throw new Error("Pool not found");
       }
 
       const activeBinId = pairAccount.activeId;
       const binStep = pairAccount.binStep;
       const price = this.binIdToPrice(activeBinId, binStep);
-      
+
       return {
         binId: activeBinId,
         price,
         binStep,
       };
     } catch (error) {
-      console.error('Failed to fetch active bin:', error);
+      console.error("Failed to fetch active bin:", error);
       throw error;
     }
   }
 
-  async getActiveBins(poolAddress: PublicKey, count: number = 20): Promise<any[]> {
+  async getActiveBins(
+    poolAddress: PublicKey,
+    count: number = 20
+  ): Promise<any[]> {
     try {
       const pairAccount = await this.sarosDLMM.getPairAccount(poolAddress);
-      
+
       if (!pairAccount) {
-        throw new Error('Pool not found');
+        throw new Error("Pool not found");
       }
 
       const activeBinId = pairAccount.activeId;
       const binStep = pairAccount.binStep;
-      
+
       // Get bins around the active bin
       const startBinId = activeBinId - Math.floor(count / 2);
       const endBinId = activeBinId + Math.floor(count / 2);
-      
+
       const bins = [];
       for (let binId = startBinId; binId <= endBinId; binId++) {
         const price = this.binIdToPrice(binId, binStep);
@@ -333,10 +607,10 @@ export class DLMMClient {
           isActive: binId === activeBinId,
         });
       }
-      
+
       return bins;
     } catch (error) {
-      console.error('Failed to fetch active bins:', error);
+      console.error("Failed to fetch active bins:", error);
       return [];
     }
   }
@@ -344,18 +618,18 @@ export class DLMMClient {
   async getBinArrays(poolAddress: PublicKey): Promise<any[]> {
     try {
       const pairAccount = await this.sarosDLMM.getPairAccount(poolAddress);
-      
+
       if (!pairAccount) {
-        throw new Error('Pool not found');
+        throw new Error("Pool not found");
       }
 
       const activeBinId = pairAccount.activeId;
       const binStep = pairAccount.binStep;
-      
+
       // Get bin arrays around active bin
       const activeBinArrayIndex = Math.floor(activeBinId / 70);
       const binArrays = [];
-      
+
       for (let i = -2; i <= 2; i++) {
         const index = activeBinArrayIndex + i;
         try {
@@ -363,7 +637,7 @@ export class DLMMClient {
             pair: poolAddress,
             binArrayIndex: index,
           });
-          
+
           if (binArray) {
             binArrays.push({
               index,
@@ -375,19 +649,25 @@ export class DLMMClient {
           continue;
         }
       }
-      
+
       return binArrays;
     } catch (error) {
-      console.error('Failed to fetch bin arrays:', error);
+      console.error("Failed to fetch bin arrays:", error);
       return [];
     }
   }
 
-  async getQuote(poolAddress: PublicKey, amountIn: string, swapForY: boolean): Promise<any> {
+  async getQuote(
+    poolAddress: PublicKey,
+    amountIn: string,
+    swapForY: boolean
+  ): Promise<any> {
     try {
-      const metadata = await this.sarosDLMM.fetchPoolMetadata(poolAddress.toString());
+      const metadata = await this.sarosDLMM.fetchPoolMetadata(
+        poolAddress.toString()
+      );
       const pairAccount = await this.sarosDLMM.getPairAccount(poolAddress);
-      
+
       const quote = await this.sarosDLMM.getQuote({
         pair: poolAddress,
         tokenBase: pairAccount.tokenMintX,
@@ -399,10 +679,10 @@ export class DLMMClient {
         tokenQuoteDecimal: metadata.extra.tokenQuoteDecimal,
         slippage: 0.5,
       });
-      
+
       return quote;
     } catch (error) {
-      console.error('Failed to get quote:', error);
+      console.error("Failed to get quote:", error);
       throw error;
     }
   }
@@ -410,47 +690,47 @@ export class DLMMClient {
   async getBinLiquidity(poolAddress: PublicKey, binId: number): Promise<any> {
     try {
       const pairAccount = await this.sarosDLMM.getPairAccount(poolAddress);
-      
+
       if (!pairAccount) {
-        throw new Error('Pool not found');
+        throw new Error("Pool not found");
       }
 
       const binStep = pairAccount.binStep;
       const price = this.binIdToPrice(binId, binStep);
-      
+
       // Get bin array that contains this bin
       const binArrayIndex = Math.floor(binId / 70); // Bins are grouped in arrays of 70
-      
+
       try {
         const binArray = await this.sarosDLMM.getBinArray({
           pair: poolAddress,
           binArrayIndex: binArrayIndex,
         });
-        
+
         // Get bin info from the array
         const binInfo = await this.sarosDLMM.getBinArrayInfo({
           pair: poolAddress,
           payer: poolAddress,
           binArrayIndex,
         });
-        
+
         return {
           binId,
           price,
-          reserveX: binInfo.bins[binId % 70]?.amountX || '0',
-          reserveY: binInfo.bins[binId % 70]?.amountY || '0',
+          reserveX: binInfo.bins[binId % 70]?.amountX || "0",
+          reserveY: binInfo.bins[binId % 70]?.amountY || "0",
         };
       } catch (err) {
         // Bin array might not exist
         return {
           binId,
           price,
-          reserveX: '0',
-          reserveY: '0',
+          reserveX: "0",
+          reserveY: "0",
         };
       }
     } catch (error) {
-      console.error('Failed to fetch bin liquidity:', error);
+      console.error("Failed to fetch bin liquidity:", error);
       throw error;
     }
   }
@@ -461,14 +741,16 @@ export class DLMMClient {
     swapForY: boolean
   ): Promise<any> {
     try {
-      const metadata = await this.sarosDLMM.fetchPoolMetadata(poolAddress.toString());
-      
+      const metadata = await this.sarosDLMM.fetchPoolMetadata(
+        poolAddress.toString()
+      );
+
       if (!metadata) {
-        throw new Error('Pool not found');
+        throw new Error("Pool not found");
       }
 
       const pairAccount = await this.sarosDLMM.getPairAccount(poolAddress);
-      
+
       const quote = await this.sarosDLMM.getQuote({
         pair: poolAddress,
         tokenBase: pairAccount.tokenMintX,
@@ -483,12 +765,12 @@ export class DLMMClient {
 
       return {
         amountIn: amountIn,
-        amountOut: quote.amountOut?.toString() || '0',
-        fee: '0',
+        amountOut: quote.amountOut?.toString() || "0",
+        fee: "0",
         priceImpact: 0,
       };
     } catch (error) {
-      console.error('Failed to get swap quote:', error);
+      console.error("Failed to get swap quote:", error);
       throw error;
     }
   }
@@ -502,7 +784,7 @@ export class DLMMClient {
   ): Promise<string> {
     try {
       const pairAccount = await this.sarosDLMM.getPairAccount(poolAddress);
-      
+
       const result = await this.sarosDLMM.swap({
         tokenMintX: pairAccount.tokenMintX,
         tokenMintY: pairAccount.tokenMintY,
@@ -515,18 +797,31 @@ export class DLMMClient {
         payer: wallet.publicKey,
       });
 
-      const signature = result.signature?.toString() || 'success';
+      const signature = result.signature?.toString() || "success";
 
       return signature;
     } catch (error) {
-      console.error('Failed to execute swap:', error);
+      console.error("Failed to execute swap:", error);
       throw error;
     }
   }
 
   // Helper function to convert bin ID to price
   private binIdToPrice(binId: number, binStep: number): number {
-    return Math.pow(1 + binStep / 10000, binId);
+    // DLMM uses a different formula: price = (1 + binStep/10000)^(binId - 8388608)
+    // 8388608 is the reference bin ID (2^23) where price = 1
+    const REFERENCE_BIN_ID = 8388608;
+    const basisPoints = binStep / 10000;
+    const exponent = binId - REFERENCE_BIN_ID;
+
+    // For large exponents, use logarithmic calculation to avoid overflow
+    if (Math.abs(exponent) > 10000) {
+      // price = exp(exponent * ln(1 + basisPoints))
+      const logPrice = exponent * Math.log(1 + basisPoints);
+      return Math.exp(logPrice);
+    }
+
+    return Math.pow(1 + basisPoints, exponent);
   }
 
   // Helper function to convert price to bin ID
@@ -537,18 +832,24 @@ export class DLMMClient {
   // Calculate position value in USD
   async getPositionValue(position: Position): Promise<number> {
     try {
-      const poolInfo = await this.getPoolInfo(new PublicKey(position.poolAddress));
-      
-      const liquidityX = parseFloat(position.liquidityX) / Math.pow(10, poolInfo.tokenX.decimals);
-      const liquidityY = parseFloat(position.liquidityY) / Math.pow(10, poolInfo.tokenY.decimals);
-      
+      const poolInfo = await this.getPoolInfo(
+        new PublicKey(position.poolAddress)
+      );
+
+      const liquidityX =
+        parseFloat(position.liquidityX) /
+        Math.pow(10, poolInfo.tokenX.decimals);
+      const liquidityY =
+        parseFloat(position.liquidityY) /
+        Math.pow(10, poolInfo.tokenY.decimals);
+
       // Assuming tokenY is the quote token (e.g., USDC)
       const valueX = liquidityX * poolInfo.currentPrice;
       const valueY = liquidityY;
-      
+
       return valueX + valueY;
     } catch (error) {
-      console.error('Failed to calculate position value:', error);
+      console.error("Failed to calculate position value:", error);
       return 0;
     }
   }
@@ -562,16 +863,17 @@ export class DLMMClient {
   ): number {
     const priceRatio = currentPrice / initialPrice;
     const sqrtPriceRatio = Math.sqrt(priceRatio);
-    
+
     // Calculate value if held
     const heldValue = initialValueX * priceRatio + initialValueY;
-    
+
     // Calculate value in LP
-    const lpValue = 2 * sqrtPriceRatio * (initialValueX + initialValueY / initialPrice);
-    
+    const lpValue =
+      2 * sqrtPriceRatio * (initialValueX + initialValueY / initialPrice);
+
     // IL as percentage
     const il = ((lpValue - heldValue) / heldValue) * 100;
-    
+
     return il;
   }
 
@@ -584,19 +886,24 @@ export class DLMMClient {
   }> {
     try {
       const currentValue = await this.getPositionValue(position);
-      
-      const poolInfo = await this.getPoolInfo(new PublicKey(position.poolAddress));
-      
-      const feeX = parseFloat(position.feeX) / Math.pow(10, poolInfo.tokenX.decimals);
-      const feeY = parseFloat(position.feeY) / Math.pow(10, poolInfo.tokenY.decimals);
+
+      const poolInfo = await this.getPoolInfo(
+        new PublicKey(position.poolAddress)
+      );
+
+      const feeX =
+        parseFloat(position.feeX) / Math.pow(10, poolInfo.tokenX.decimals);
+      const feeY =
+        parseFloat(position.feeY) / Math.pow(10, poolInfo.tokenY.decimals);
       const feesEarned = feeX * poolInfo.currentPrice + feeY;
-      
+
       // For IL calculation, we'd need initial price (stored separately)
       // This is a simplified version
       const impermanentLoss = 0;
-      
-      const totalReturn = ((currentValue + feesEarned - currentValue) / currentValue) * 100;
-      
+
+      const totalReturn =
+        ((currentValue + feesEarned - currentValue) / currentValue) * 100;
+
       return {
         currentValue,
         feesEarned,
@@ -604,7 +911,7 @@ export class DLMMClient {
         totalReturn,
       };
     } catch (error) {
-      console.error('Failed to calculate position metrics:', error);
+      console.error("Failed to calculate position metrics:", error);
       return {
         currentValue: 0,
         feesEarned: 0,

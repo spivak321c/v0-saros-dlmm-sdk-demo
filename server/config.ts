@@ -6,8 +6,8 @@
 export const config = {
   // Solana RPC Configuration
   solana: {
-    rpcUrl: process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com',
-    network: process.env.SOLANA_NETWORK || 'mainnet-beta',
+    rpcUrl: process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com',
+    network: process.env.SOLANA_NETWORK || 'devnet',
     commitment: 'confirmed' as const,
   },
 

@@ -1,6 +1,6 @@
 import { Connection, Commitment } from '@solana/web3.js';
 
-const RPC_ENDPOINT = process.env.RPC_ENDPOINT || 'https://api.mainnet-beta.solana.com';
+const RPC_ENDPOINT = process.env.RPC_ENDPOINT || 'https://api.devnet.solana.com';
 const COMMITMENT: Commitment = 'confirmed';
 
 export const connection = new Connection(RPC_ENDPOINT, {

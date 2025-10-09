@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 // Position schemas
 export const PositionSchema = z.object({
@@ -91,13 +91,13 @@ export const RebalanceEventSchema = z.object({
   }),
   reason: z.string(),
   signature: z.string(),
-  status: z.enum(['pending', 'success', 'failed']),
+  status: z.enum(["pending", "success", "failed"]),
 });
 
 // Alert schemas
 export const AlertSchema = z.object({
   id: z.string(),
-  type: z.enum(['info', 'warning', 'error', 'success']),
+  type: z.enum(["info", "warning", "error", "success"]),
   title: z.string(),
   message: z.string(),
   positionAddress: z.string().optional(),
@@ -106,13 +106,13 @@ export const AlertSchema = z.object({
 });
 
 // WebSocket message schemas
-export const WSMessageSchema = z.discriminatedUnion('type', [
+export const WSMessageSchema = z.discriminatedUnion("type", [
   z.object({
-    type: z.literal('position_update'),
+    type: z.literal("position_update"),
     data: PositionDataSchema,
   }),
   z.object({
-    type: z.literal('price_update'),
+    type: z.literal("price_update"),
     data: z.object({
       poolAddress: z.string(),
       price: z.number(),
@@ -120,14 +120,22 @@ export const WSMessageSchema = z.discriminatedUnion('type', [
     }),
   }),
   z.object({
-    type: z.literal('alert'),
+    type: z.literal("alert"),
     data: AlertSchema,
   }),
   z.object({
-    type: z.literal('rebalance_event'),
+    type: z.literal("rebalance_event"),
     data: RebalanceEventSchema,
   }),
 ]);
+
+// Stop Loss schemas
+export const StopLossConfigSchema = z.object({
+  positionAddress: z.string(),
+  triggerPrice: z.number(),
+  enabled: z.boolean(),
+  createdAt: z.number(),
+});
 
 // API Response schemas
 export const ApiResponseSchema = <T extends z.ZodType>(dataSchema: T) =>
@@ -146,6 +154,7 @@ export type VolatilityData = z.infer<typeof VolatilityDataSchema>;
 export type RebalanceParams = z.infer<typeof RebalanceParamsSchema>;
 export type RebalanceEvent = z.infer<typeof RebalanceEventSchema>;
 export type Alert = z.infer<typeof AlertSchema>;
+export type StopLossConfig = z.infer<typeof StopLossConfigSchema>;
 export type WSMessage = z.infer<typeof WSMessageSchema>;
 export type ApiResponse<T> = {
   success: boolean;

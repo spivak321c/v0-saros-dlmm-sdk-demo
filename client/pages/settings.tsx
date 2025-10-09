@@ -1,10 +1,16 @@
-import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Slider } from '@/components/ui/slider';
+import { useState, useEffect } from "react";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
 
 export default function Settings() {
   const [autoRebalance, setAutoRebalance] = useState(false);
@@ -13,6 +19,58 @@ export default function Settings() {
   const [feeThreshold, setFeeThreshold] = useState(10);
   const [stopLossEnabled, setStopLossEnabled] = useState(false);
   const [stopLossThreshold, setStopLossThreshold] = useState([10]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
+  const loadSettings = async () => {
+    try {
+      const apiUrl = `${import.meta.env.VITE_API_URL ||
+        "http://localhost:3001/api"}/settings`;
+      console.log("[Settings] Loading settings from:", apiUrl);
+      const response = await fetch(apiUrl);
+      const result = await response.json();
+      console.log("[Settings] Loaded settings:", result);
+
+      if (result.success && result.data) {
+        const settings = result.data;
+        setAutoRebalance(settings.autoRebalance || false);
+        setAutoCollectFees(settings.autoCollectFees !== false);
+        setRebalanceThreshold([settings.rebalanceThreshold || 5]);
+        setFeeThreshold(settings.feeThreshold || 10);
+        setStopLossEnabled(settings.stopLossEnabled || false);
+        setStopLossThreshold([settings.stopLossThreshold || 10]);
+      }
+    } catch (error) {
+      console.error("[Settings] Failed to load settings:", error);
+    }
+  };
+
+  const saveSettings = async (settingsData: any) => {
+    setSaving(true);
+    try {
+      const apiUrl = `${import.meta.env.VITE_API_URL ||
+        "http://localhost:3001/api"}/settings`;
+      console.log("[Settings] Saving settings to:", apiUrl, settingsData);
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settingsData),
+      });
+      const result = await response.json();
+      console.log("[Settings] Save response:", result);
+
+      if (result.success) {
+        console.log("[Settings] Settings saved successfully");
+      }
+    } catch (error) {
+      console.error("[Settings] Failed to save settings:", error);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -27,7 +85,8 @@ export default function Settings() {
           <CardHeader>
             <CardTitle>Auto Rebalancing</CardTitle>
             <CardDescription>
-              Automatically rebalance positions when price moves beyond threshold
+              Automatically rebalance positions when price moves beyond
+              threshold
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -51,13 +110,23 @@ export default function Settings() {
                   step={1}
                 />
                 <p className="text-sm text-gray-500">
-                  Rebalance when price is within {rebalanceThreshold[0]}% of range boundary
+                  Rebalance when price is within {rebalanceThreshold[0]}% of
+                  range boundary
                 </p>
               </div>
             )}
 
-            <Button className="w-full" disabled={!autoRebalance}>
-              Save Rebalancing Settings
+            <Button
+              className="w-full"
+              disabled={!autoRebalance || saving}
+              onClick={() =>
+                saveSettings({
+                  autoRebalance,
+                  rebalanceThreshold: rebalanceThreshold[0],
+                })
+              }
+            >
+              {saving ? "Saving..." : "Save Rebalancing Settings"}
             </Button>
           </CardContent>
         </Card>
@@ -94,8 +163,12 @@ export default function Settings() {
               </div>
             )}
 
-            <Button className="w-full" disabled={!autoCollectFees}>
-              Save Collection Settings
+            <Button
+              className="w-full"
+              disabled={!autoCollectFees || saving}
+              onClick={() => saveSettings({ autoCollectFees, feeThreshold })}
+            >
+              {saving ? "Saving..." : "Save Collection Settings"}
             </Button>
           </CardContent>
         </Card>
@@ -134,8 +207,18 @@ export default function Settings() {
               </div>
             )}
 
-            <Button className="w-full" variant="destructive" disabled={!stopLossEnabled}>
-              Save Stop Loss Settings
+            <Button
+              className="w-full"
+              variant="destructive"
+              disabled={!stopLossEnabled || saving}
+              onClick={() =>
+                saveSettings({
+                  stopLossEnabled,
+                  stopLossThreshold: stopLossThreshold[0],
+                })
+              }
+            >
+              {saving ? "Saving..." : "Save Stop Loss Settings"}
             </Button>
           </CardContent>
         </Card>
@@ -164,7 +247,17 @@ export default function Settings() {
               <Switch id="notify-risk" defaultChecked />
             </div>
 
-            <Button className="w-full">Save Notification Settings</Button>
+            <Button
+              className="w-full"
+              disabled={saving}
+              onClick={() =>
+                saveSettings({
+                  notifications: { rebalance: true, fees: true, risk: true },
+                })
+              }
+            >
+              {saving ? "Saving..." : "Save Notification Settings"}
+            </Button>
           </CardContent>
         </Card>
       </div>
