@@ -3,18 +3,14 @@
  * Handles automated position rebalancing with volatility-adjusted dynamic ranges
  */
 
-import { PublicKey, Transaction, Keypair } from '@solana/web3.js';
-import BN from 'bn.js';
-import { config } from '../config';
-import { logger } from '../utils/logger';
-import {
-  RebalanceParams,
-  RebalanceResult,
-  ApiResponse,
-} from '../types';
-import { RebalanceError, ValidationError } from '../utils/errors';
-import { DLMMService } from './dlmm.service';
-import { VolatilityService } from './volatility.service';
+import { PublicKey, Transaction, Keypair } from "@solana/web3.js";
+import BN from "bn.js";
+import { config } from "../config";
+import { logger } from "../utils/logger";
+import { RebalanceParams, RebalanceResult, ApiResponse } from "../types";
+import { RebalanceError, ValidationError } from "../utils/errors";
+import { DLMMService } from "./dlmm.service";
+import { VolatilityService } from "./volatility.service";
 
 export class RebalanceService {
   private dlmmService: DLMMService;
@@ -23,7 +19,7 @@ export class RebalanceService {
   constructor() {
     this.dlmmService = new DLMMService();
     this.volatilityService = new VolatilityService();
-    logger.info('Rebalance Service initialized');
+    logger.info("Rebalance Service initialized");
   }
 
   /**
@@ -34,7 +30,7 @@ export class RebalanceService {
     signerKeypair: Keypair
   ): Promise<ApiResponse<RebalanceResult>> {
     try {
-      logger.info('Starting position rebalance', {
+      logger.info("Starting position rebalance", {
         position: params.positionKey.toString(),
         targetVolatility: params.targetVolatility,
       });
@@ -48,25 +44,26 @@ export class RebalanceService {
       );
 
       if (!positionMetrics.data) {
-        throw new RebalanceError('Position not found');
+        throw new RebalanceError("Position not found");
       }
 
       const position = positionMetrics.data.position;
       const pool = position.pool;
 
       // Calculate current volatility
-      const volatilityResponse = await this.volatilityService.calculateVolatility(
-        pool.toString()
-      );
+      const volatilityResponse =
+        await this.volatilityService.calculateVolatility(pool.toString());
 
       if (!volatilityResponse.data) {
-        throw new RebalanceError('Failed to calculate volatility');
+        throw new RebalanceError("Failed to calculate volatility");
       }
 
       const currentVolatility = volatilityResponse.data.volatility;
 
       // Calculate new range based on volatility
-      const activeBinId = await this.dlmmService.getActiveBinId(pool.toString());
+      const activeBinId = await this.dlmmService.getActiveBinId(
+        pool.toString()
+      );
       const newRange = this.calculateDynamicRange(
         activeBinId,
         currentVolatility,
@@ -78,7 +75,7 @@ export class RebalanceService {
         upper: position.upperBinId,
       };
 
-      logger.info('Calculated new range', {
+      logger.info("Calculated new range", {
         oldRange,
         newRange,
         currentVolatility: currentVolatility.toFixed(4),
@@ -90,7 +87,7 @@ export class RebalanceService {
         newRange.lower === oldRange.lower &&
         newRange.upper === oldRange.upper
       ) {
-        logger.info('No rebalance needed, range unchanged');
+        logger.info("No rebalance needed, range unchanged");
         return {
           success: true,
           data: {
@@ -105,15 +102,18 @@ export class RebalanceService {
       }
 
       // Execute rebalance transaction
+      // Pass liquidity amount if this is automated rebalancing
+      const automatedLiquidity = (params as any).liquidityToTransfer;
       const result = await this.executeRebalance(
         position.publicKey,
         pool,
         newRange,
         params.slippageBps,
-        signerKeypair
+        signerKeypair,
+        automatedLiquidity
       );
 
-      logger.info('Rebalance completed', {
+      logger.info("Rebalance completed", {
         position: params.positionKey.toString(),
         txSignature: result.txSignature,
       });
@@ -124,19 +124,16 @@ export class RebalanceService {
         timestamp: Date.now(),
       };
     } catch (error: any) {
-      logger.error('Rebalance failed', {
+      logger.error("Rebalance failed", {
         position: params.positionKey.toString(),
         error: error.message,
       });
 
-      if (
-        error instanceof RebalanceError ||
-        error instanceof ValidationError
-      ) {
+      if (error instanceof RebalanceError || error instanceof ValidationError) {
         throw error;
       }
 
-      throw new RebalanceError('Rebalance execution failed', {
+      throw new RebalanceError("Rebalance execution failed", {
         originalError: error.message,
       });
     }
@@ -175,52 +172,83 @@ export class RebalanceService {
 
   /**
    * Execute rebalance transaction
+   * For automated rebalancing: removes liquidity from old position and creates new one
+   * For manual rebalancing: creates new position, user manages liquidity separately
    */
   private async executeRebalance(
     positionKey: PublicKey,
     poolKey: PublicKey,
     newRange: { lower: number; upper: number },
     slippageBps: number,
-    signerKeypair: Keypair
+    signerKeypair: Keypair,
+    automatedLiquidityTransfer?: BN
   ): Promise<RebalanceResult> {
     try {
-      // TODO: Integrate with Saros DLMM SDK
-      // 1. Remove liquidity from old position
-      // 2. Add liquidity to new position with new range
-      // 3. Close old position if needed
+      if (automatedLiquidityTransfer) {
+        // AUTOMATED REBALANCING: Full liquidity transfer flow
+        logger.info("Executing automated rebalance with liquidity transfer", {
+          positionKey: positionKey.toString(),
+          liquidityToTransfer: automatedLiquidityTransfer.toString(),
+        });
 
-      // const dlmm = await DLMM.create(connection, poolKey);
-      // const removeLiquidityTx = await dlmm.removeLiquidity({
-      //   position: positionKey,
-      //   user: signerKeypair.publicKey,
-      //   binLiquidityRemoval: [...],
-      // });
-      //
-      // const addLiquidityTx = await dlmm.addLiquidity({
-      //   position: newPositionKey,
-      //   user: signerKeypair.publicKey,
-      //   totalXAmount: ...,
-      //   totalYAmount: ...,
-      //   strategy: {
-      //     minBinId: newRange.lower,
-      //     maxBinId: newRange.upper,
-      //     strategyType: StrategyType.SpotBalanced,
-      //   },
-      // });
+        // TODO: Integrate with Saros DLMM SDK for automated flow
+        // 1. Remove ALL liquidity from old position
+        // const dlmm = await DLMM.create(connection, poolKey);
+        // const removeLiquidityTx = await dlmm.removeLiquidity({
+        //   position: positionKey,
+        //   user: signerKeypair.publicKey,
+        //   binLiquidityRemoval: [...], // Remove all bins
+        //   shouldClaimAndClose: true,
+        // });
+        //
+        // 2. Create new position with removed liquidity
+        // const addLiquidityTx = await dlmm.addLiquidity({
+        //   position: newPositionKey,
+        //   user: signerKeypair.publicKey,
+        //   totalXAmount: removedXAmount,
+        //   totalYAmount: removedYAmount,
+        //   strategy: {
+        //     minBinId: newRange.lower,
+        //     maxBinId: newRange.upper,
+        //     strategyType: StrategyType.SpotBalanced,
+        //   },
+        // });
+        //
+        // 3. Execute both transactions atomically or in sequence
 
-      // Placeholder implementation
-      const mockTxSignature = 'mock_tx_signature_' + Date.now();
+        // Placeholder for automated flow
+        const mockTxSignature = "automated_rebalance_" + Date.now();
 
-      return {
-        success: true,
-        oldRange: { lower: 0, upper: 0 }, // Would come from actual position
-        newRange,
-        liquidityAdjusted: new BN(0),
-        txSignature: mockTxSignature,
-        timestamp: Date.now(),
-      };
+        return {
+          success: true,
+          oldRange: { lower: 0, upper: 0 },
+          newRange,
+          liquidityAdjusted: automatedLiquidityTransfer,
+          txSignature: mockTxSignature,
+          timestamp: Date.now(),
+        };
+      } else {
+        // MANUAL REBALANCING: Just create new position, user handles liquidity
+        logger.info("Executing manual rebalance (new position only)", {
+          positionKey: positionKey.toString(),
+        });
+
+        // This creates a new empty position with the new range
+        // User will manually add liquidity via the UI
+        // Placeholder implementation
+        const mockTxSignature = "manual_rebalance_" + Date.now();
+
+        return {
+          success: true,
+          oldRange: { lower: 0, upper: 0 },
+          newRange,
+          liquidityAdjusted: new BN(0),
+          txSignature: mockTxSignature,
+          timestamp: Date.now(),
+        };
+      }
     } catch (error: any) {
-      logger.error('Failed to execute rebalance transaction', {
+      logger.error("Failed to execute rebalance transaction", {
         error: error.message,
       });
 
@@ -261,7 +289,7 @@ export class RebalanceService {
     }
 
     if (params.slippageBps < 0) {
-      throw new ValidationError('Slippage cannot be negative');
+      throw new ValidationError("Slippage cannot be negative");
     }
   }
 
@@ -274,18 +302,16 @@ export class RebalanceService {
     threshold: number = 0.1
   ): Promise<boolean> {
     try {
-      const positionMetrics = await this.dlmmService.getPositionMetrics(
-        positionKey
-      );
+      const positionMetrics =
+        await this.dlmmService.getPositionMetrics(positionKey);
 
       if (!positionMetrics.data) {
         return false;
       }
 
       const pool = positionMetrics.data.position.pool;
-      const volatilityResponse = await this.volatilityService.calculateVolatility(
-        pool.toString()
-      );
+      const volatilityResponse =
+        await this.volatilityService.calculateVolatility(pool.toString());
 
       if (!volatilityResponse.data) {
         return false;
@@ -297,7 +323,7 @@ export class RebalanceService {
       // Rebalance if volatility difference exceeds threshold
       return volatilityDiff / targetVolatility > threshold;
     } catch (error: any) {
-      logger.error('Failed to check rebalancing need', {
+      logger.error("Failed to check rebalancing need", {
         position: positionKey,
         error: error.message,
       });

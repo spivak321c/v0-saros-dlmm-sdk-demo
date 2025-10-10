@@ -177,6 +177,7 @@ class Storage {
       feeThreshold: 10,
       stopLossEnabled: false,
       stopLossThreshold: 10,
+      monitoredWallet: (this.data.settings as any).monitoredWallet || null,
       telegram: this.data.settings.telegram,
       rebalancing: this.data.settings.rebalancing,
       monitoring: this.data.settings.monitoring,
@@ -196,6 +197,9 @@ class Storage {
     if (settings.rebalanceThreshold !== undefined) {
       this.data.settings.rebalancing.volatilityThreshold =
         settings.rebalanceThreshold / 100;
+    }
+    if (settings.monitoredWallet !== undefined) {
+      (this.data.settings as any).monitoredWallet = settings.monitoredWallet;
     }
     if (settings.autoCollectFees !== undefined) {
       // Store in settings for future use

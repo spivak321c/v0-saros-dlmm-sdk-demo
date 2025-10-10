@@ -85,19 +85,45 @@ export function PositionCard({ position, onCollectFees, onRebalance, wallet }: P
 
       setIsRebalancing(true);
 
-      // Deserialize the transaction
-      const txBuffer = Buffer.from(rebalanceData.transaction, 'base64');
-      const transaction = Transaction.from(txBuffer);
+      // Check if this is a multi-transaction rebalance
+      let parsedTx;
+      try {
+        parsedTx = JSON.parse(rebalanceData.transaction);
+      } catch {
+        parsedTx = null;
+      }
 
-      // Sign the transaction
-      const signedTx = await signTransaction(transaction);
+      let signedTransactionData;
 
-      // Send the transaction
+      if (parsedTx && parsedTx.type === 'multi' && Array.isArray(parsedTx.transactions)) {
+        // Handle multiple transactions
+        const signedTxs: string[] = [];
+        
+        for (const txBase64 of parsedTx.transactions) {
+          const txBuffer = Uint8Array.from(atob(txBase64), c => c.charCodeAt(0));
+          const transaction = Transaction.from(txBuffer);
+          const signedTx = await signTransaction(transaction);
+          signedTxs.push(btoa(String.fromCharCode(...signedTx.serialize())));
+        }
+        
+        signedTransactionData = JSON.stringify({
+          transactions: signedTxs,
+          type: 'multi'
+        });
+      } else {
+        // Handle single transaction (legacy)
+        const txBuffer = Uint8Array.from(atob(rebalanceData.transaction), c => c.charCodeAt(0));
+        const transaction = Transaction.from(txBuffer);
+        const signedTx = await signTransaction(transaction);
+        signedTransactionData = btoa(String.fromCharCode(...signedTx.serialize()));
+      }
+
+      // Send the transaction(s)
       const response = await fetch(`${API_URL}/rebalance/execute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          signedTransaction: signedTx.serialize().toString('base64'),
+          signedTransaction: signedTransactionData,
           positionAddress: position.position.address,
           newPositionMint: rebalanceData.newPositionMint,
         }),

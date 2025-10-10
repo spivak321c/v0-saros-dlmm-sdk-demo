@@ -12,12 +12,15 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
+import { useWallet } from "@solana/wallet-adapter-react";
 import { Save, AlertCircle } from "lucide-react";
+import { useWebSocket } from "@/lib/websocket";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 
 export default function Settings() {
   const { toast } = useToast();
+  const { publicKey } = useWallet();
   const [autoRebalance, setAutoRebalance] = useState(false);
   const [autoCollectFees, setAutoCollectFees] = useState(true);
   const [rebalanceThreshold, setRebalanceThreshold] = useState([5]);
@@ -26,10 +29,53 @@ export default function Settings() {
   const [stopLossThreshold, setStopLossThreshold] = useState([10]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [autoRebalanceActive, setAutoRebalanceActive] = useState(false);
+  const { lastMessage } = useWebSocket();
 
   useEffect(() => {
     loadSettings();
+    loadAutoRebalanceStatus();
   }, []);
+
+  // Listen for WebSocket updates
+  useEffect(() => {
+    if (!lastMessage) return;
+
+    if (lastMessage.type === "auto_rebalance_status") {
+      const status = lastMessage.data;
+      setAutoRebalanceActive(status.enabled);
+      if (status.threshold) {
+        setRebalanceThreshold([status.threshold]);
+      }
+    } else if (lastMessage.type === "alert") {
+      const alert = lastMessage.data;
+      if (alert.type === "warning" && alert.title === "Rebalance Recommended") {
+        toast({
+          title: alert.title,
+          description: alert.message,
+          variant: "default",
+        });
+      }
+    } else if (lastMessage.type === "rebalance_check") {
+      const data = lastMessage.data;
+      if (data.shouldRebalance) {
+        console.log("[Settings] Rebalance check:", data);
+      }
+    }
+  }, [lastMessage, toast]);
+
+  const loadAutoRebalanceStatus = async () => {
+    try {
+      const response = await fetch(`${API_URL}/automation/rebalance/status`);
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        setAutoRebalanceActive(result.data.enabled);
+      }
+    } catch (error) {
+      console.error("[Settings] Failed to load auto-rebalance status:", error);
+    }
+  };
 
   const loadSettings = async () => {
     try {
@@ -78,6 +124,13 @@ export default function Settings() {
       const result = await response.json();
 
       if (result.success) {
+        // Handle auto-rebalancing activation/deactivation
+        if (autoRebalance && !autoRebalanceActive) {
+          await startAutoRebalancing();
+        } else if (!autoRebalance && autoRebalanceActive) {
+          await stopAutoRebalancing();
+        }
+
         toast({
           title: "Success",
           description: "Settings saved successfully",
@@ -95,6 +148,83 @@ export default function Settings() {
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const startAutoRebalancing = async () => {
+    if (!publicKey) {
+      toast({
+        title: "Wallet Required",
+        description: "Please connect your wallet to enable auto-rebalancing",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/automation/rebalance/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          wallet: publicKey.toString(),
+          threshold: rebalanceThreshold[0],
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setAutoRebalanceActive(true);
+        toast({
+          title: "Auto-Rebalancing Started",
+          description: `Monitoring positions for ${publicKey
+            .toString()
+            .slice(0, 8)}...`,
+        });
+      } else {
+        throw new Error(result.error || "Failed to start auto-rebalancing");
+      }
+    } catch (error) {
+      console.error("[Settings] Failed to start auto-rebalancing:", error);
+      toast({
+        title: "Error",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to start auto-rebalancing",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const stopAutoRebalancing = async () => {
+    try {
+      const response = await fetch(`${API_URL}/automation/rebalance/stop`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setAutoRebalanceActive(false);
+        toast({
+          title: "Auto-Rebalancing Stopped",
+          description: "Position monitoring has been disabled",
+        });
+      } else {
+        throw new Error(result.error || "Failed to stop auto-rebalancing");
+      }
+    } catch (error) {
+      console.error("[Settings] Failed to stop auto-rebalancing:", error);
+      toast({
+        title: "Error",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to stop auto-rebalancing",
+        variant: "destructive",
+      });
     }
   };
 
@@ -146,7 +276,14 @@ export default function Settings() {
 
           {autoRebalance && (
             <div className="space-y-2 pl-4 border-l-2 border-primary/20">
-              <Label>Rebalance Threshold: {rebalanceThreshold[0]}%</Label>
+              <div className="flex items-center justify-between">
+                <Label>Rebalance Threshold: {rebalanceThreshold[0]}%</Label>
+                {autoRebalanceActive && (
+                  <span className="text-xs px-2 py-1 rounded-full bg-green-500/10 text-green-500 border border-green-500/20">
+                    Active
+                  </span>
+                )}
+              </div>
               <Slider
                 value={rebalanceThreshold}
                 onValueChange={setRebalanceThreshold}
@@ -155,7 +292,8 @@ export default function Settings() {
                 step={1}
               />
               <p className="text-xs text-muted-foreground">
-                Trigger rebalance when price moves this % outside range
+                Trigger rebalance alert when price is within this % of range
+                boundary
               </p>
             </div>
           )}

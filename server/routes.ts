@@ -6,6 +6,7 @@ import { rebalancer } from "./services/rebalancer";
 import { ecoRebalancer } from "./services/eco-rebalancer";
 import { stopLossManager } from "./services/stop-loss-manager";
 import { telegramBot } from "./services/telegram-bot";
+import { wsServer } from "./services/websocket-server";
 import { dlmmClient } from "./solana/dlmm-client";
 import { ilCalculator } from "./utils/il-calculator";
 import { feeOptimizer } from "./utils/fee-optimizer";
@@ -168,6 +169,16 @@ router.post("/rebalance", async (req, res) => {
       throw new Error("Position not found");
     }
 
+    logger.info("Position data loaded", {
+      positionAddress,
+      poolAddress: positionData.pool.address,
+      currentActiveBinId: positionData.pool.activeId,
+      currentPositionRange: {
+        lower: positionData.position.lowerBinId,
+        upper: positionData.position.upperBinId,
+      },
+    });
+
     const volatilityData = volatilityTracker.getVolatilityData(
       positionData.pool.address
     );
@@ -182,14 +193,33 @@ router.post("/rebalance", async (req, res) => {
     logger.info("Preparing rebalance transaction", {
       positionAddress,
       newRange,
+      activeBinId: positionData.pool.activeId,
+      volatility,
+      // Detailed validation info
+      rangeValidation: {
+        lowerBinId: newRange.lowerBinId,
+        upperBinId: newRange.upperBinId,
+        activeBinId: positionData.pool.activeId,
+        relativeBinIdLeft: newRange.lowerBinId - positionData.pool.activeId,
+        relativeBinIdRight: newRange.upperBinId - positionData.pool.activeId,
+        lowerLessThanActive: newRange.lowerBinId < positionData.pool.activeId,
+        upperGreaterThanActive:
+          newRange.upperBinId > positionData.pool.activeId,
+        rangeWidth: newRange.upperBinId - newRange.lowerBinId,
+      },
     });
+
+    // Extract optional liquidity amounts from request
+    const { liquidityAmountX, liquidityAmountY } = req.body;
 
     // Prepare rebalance transaction using DLMM SDK
     const rebalanceResult = await dlmmClient.rebalancePosition(
       positionData.position,
       newRange.lowerBinId,
       newRange.upperBinId,
-      new PublicKey(wallet)
+      new PublicKey(wallet),
+      liquidityAmountX,
+      liquidityAmountY
     );
 
     const txData = {
@@ -247,12 +277,12 @@ router.post("/rebalance/execute", async (req, res) => {
       });
     }
 
-    // Deserialize and send the signed transaction
-    const txBuffer = Buffer.from(signedTransaction, "base64");
-    const transaction = Transaction.from(txBuffer);
-
     const { getConnection } = await import("./solana/connection");
     const connection = getConnection();
+
+    // Execute single transaction
+    const txBuffer = Buffer.from(signedTransaction, "base64");
+    const transaction = Transaction.from(txBuffer);
 
     const signature = await connection.sendRawTransaction(
       transaction.serialize(),
@@ -301,6 +331,9 @@ router.post("/rebalance/execute", async (req, res) => {
         status: "success" as const,
       };
       storage.addRebalanceEvent(rebalanceEvent);
+
+      // Broadcast rebalance event via WebSocket
+      wsServer.broadcastRebalanceEvent(rebalanceEvent);
     }
 
     res.json({
@@ -1100,6 +1133,136 @@ router.post("/settings", (req, res) => {
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : "Failed to save settings",
+      timestamp: Date.now(),
+    });
+  }
+});
+
+// Auto-Rebalancing Control
+router.post("/automation/rebalance/start", (req, res) => {
+  try {
+    const { wallet, threshold } = req.body;
+    logger.info("POST /automation/rebalance/start", { wallet, threshold });
+
+    if (!wallet) {
+      return res.status(400).json({
+        success: false,
+        error: "Wallet address is required",
+        timestamp: Date.now(),
+      });
+    }
+
+    // Store automation settings
+    const settings = storage.getSettings() || {};
+    storage.saveSettings({
+      ...settings,
+      autoRebalance: true,
+      rebalanceThreshold: threshold || 5,
+      monitoredWallet: wallet,
+    });
+
+    // Start position monitoring for the wallet
+    positionMonitor.startMonitoring([wallet]);
+    positionMonitor.startAutoRebalancing(threshold || 5);
+    logger.info("Position monitoring and auto-rebalancing started", {
+      wallet,
+      threshold: threshold || 5,
+    });
+
+    // Broadcast auto-rebalance status via WebSocket
+    wsServer.broadcastAutoRebalanceStatus({
+      enabled: true,
+      threshold: threshold || 5,
+      lastCheck: Date.now(),
+    });
+
+    res.json({
+      success: true,
+      data: {
+        message: "Auto-rebalancing started",
+        wallet,
+        threshold: threshold || 5,
+      },
+      timestamp: Date.now(),
+    });
+  } catch (error) {
+    logger.error("Failed to start auto-rebalancing", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    res.status(500).json({
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to start auto-rebalancing",
+      timestamp: Date.now(),
+    });
+  }
+});
+
+router.post("/automation/rebalance/stop", (req, res) => {
+  try {
+    logger.info("POST /automation/rebalance/stop");
+
+    // Update settings
+    const settings = storage.getSettings() || {};
+    storage.saveSettings({
+      ...settings,
+      autoRebalance: false,
+    });
+
+    // Stop monitoring
+    positionMonitor.stopMonitoring();
+    rebalancer.stopAutoRebalancing();
+    logger.info("Auto-rebalancing stopped");
+
+    // Broadcast auto-rebalance status via WebSocket
+    wsServer.broadcastAutoRebalanceStatus({
+      enabled: false,
+      threshold: settings.rebalanceThreshold || 5,
+    });
+
+    res.json({
+      success: true,
+      data: { message: "Auto-rebalancing stopped" },
+      timestamp: Date.now(),
+    });
+  } catch (error) {
+    logger.error("Failed to stop auto-rebalancing", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    res.status(500).json({
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to stop auto-rebalancing",
+      timestamp: Date.now(),
+    });
+  }
+});
+
+router.get("/automation/rebalance/status", (req, res) => {
+  try {
+    logger.info("GET /automation/rebalance/status");
+    const settings = storage.getSettings() || {};
+
+    res.json({
+      success: true,
+      data: {
+        enabled: settings.autoRebalance || false,
+        threshold: settings.rebalanceThreshold || 5,
+        wallet: settings.monitoredWallet || null,
+      },
+      timestamp: Date.now(),
+    });
+  } catch (error) {
+    logger.error("Failed to get auto-rebalancing status", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to get status",
       timestamp: Date.now(),
     });
   }

@@ -6,6 +6,7 @@ import routes from "./routes";
 import { wsServer } from "./services/websocket-server";
 import { positionMonitor } from "./services/position-monitor";
 import { volatilityTracker } from "./services/volatility-tracker";
+import { telegramBot } from "./services/telegram-bot";
 import { logger } from "./utils/logger";
 
 dotenv.config();
@@ -45,8 +46,27 @@ httpServer.listen(PORT, () => {
   wsServer.start(httpServer);
   logger.info(`WebSocket server attached to HTTP server`);
 
-  // Start monitoring services
-  // Note: In production, you'd start these based on user configuration
+  // Launch Telegram bot for interactive commands
+  telegramBot.launch();
+
+  // Load and restore automation settings from storage
+  const storage = require("./storage").default;
+  const settings = storage.getSettings();
+
+  if (settings?.autoRebalance && settings?.monitoredWallet) {
+    logger.info("Restoring auto-rebalancing from saved settings", {
+      wallet: settings.monitoredWallet,
+      threshold: settings.rebalanceThreshold || 5,
+    });
+
+    // Delay startup to avoid initial rate limiting
+    setTimeout(() => {
+      positionMonitor.startMonitoring([settings.monitoredWallet]);
+      positionMonitor.startAutoRebalancing(settings.rebalanceThreshold || 5);
+      logger.info("Auto-rebalancing restored successfully");
+    }, 3000);
+  }
+
   logger.info("Server ready - all services started");
 });
 
@@ -56,5 +76,15 @@ process.on("SIGTERM", () => {
   positionMonitor.stopMonitoring();
   volatilityTracker.stopTracking();
   wsServer.stop();
+  telegramBot.stop();
+  process.exit(0);
+});
+
+process.on("SIGINT", () => {
+  logger.info("SIGINT received, shutting down gracefully");
+  positionMonitor.stopMonitoring();
+  volatilityTracker.stopTracking();
+  wsServer.stop();
+  telegramBot.stop();
   process.exit(0);
 });

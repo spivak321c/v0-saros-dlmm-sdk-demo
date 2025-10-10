@@ -382,6 +382,9 @@ export class DLMMClient {
       const relativeBinIdLeft = lowerBinId - activeBinId;
       const relativeBinIdRight = upperBinId - activeBinId;
 
+      // Calculate bin array index from the lower bin ID
+      const binArrayIndex = Math.floor(lowerBinId / 70);
+
       // Validate relative bin IDs are within acceptable range
       if (
         Math.abs(relativeBinIdLeft) > 1000 ||
@@ -392,20 +395,12 @@ export class DLMMClient {
         );
       }
 
-      // Calculate bin array index - use the lower bin's array index
-      // Each bin array contains 70 bins
-      const binArrayIndex = Math.floor(lowerBinId / 70);
-      const upperBinArrayIndex = Math.floor(upperBinId / 70);
-
       logger.info("Calculated position parameters", {
         activeBinId,
         lowerBinId,
         upperBinId,
         relativeBinIdLeft,
         relativeBinIdRight,
-        binArrayIndex,
-        upperBinArrayIndex,
-        spansMultipleArrays: binArrayIndex !== upperBinArrayIndex,
         totalBins: upperBinId - lowerBinId + 1,
       });
 
@@ -417,23 +412,11 @@ export class DLMMClient {
         );
       }
 
-      // Log if position spans multiple bin arrays
-      if (binArrayIndex !== upperBinArrayIndex) {
-        logger.info(
-          "Position spans multiple bin arrays - SDK will handle initialization",
-          {
-            binArrayIndex,
-            upperBinArrayIndex,
-            totalArrays: upperBinArrayIndex - binArrayIndex + 1,
-          }
-        );
-      }
-
       // Generate a new position mint
       const positionMint = Keypair.generate();
       const transaction = new Transaction();
 
-      // Create position - SDK handles bin array initialization automatically
+      // Create position with bin array index
       await this.sarosDLMM.createPosition({
         pair: poolAddress,
         payer: walletPublicKey,
@@ -465,7 +448,6 @@ export class DLMMClient {
         upperBinId,
         relativeBinIdLeft,
         relativeBinIdRight,
-        binArrayIndex,
       });
 
       return {
@@ -503,8 +485,9 @@ export class DLMMClient {
       logger.debug("Retrieved pair account", { activeBinId });
       const relativeBinIdLeft = lowerBinId - activeBinId;
       const relativeBinIdRight = upperBinId - activeBinId;
-      // Calculate bin array index from the active bin ID
-      const binArrayIndex = Math.floor(activeBinId / 70);
+
+      // Calculate bin array index from the lower bin ID
+      const binArrayIndex = Math.floor(lowerBinId / 70);
 
       // Generate a new position mint
       const positionMint = Keypair.generate();
@@ -630,205 +613,6 @@ export class DLMMClient {
     }
   }
 
-  /**
-   * Rebalance a position by removing liquidity and creating a new position with optimized range
-   */
-  async rebalancePosition(
-    positionInfo: Position,
-    newLowerBinId: number,
-    newUpperBinId: number,
-    walletPublicKey: PublicKey
-  ): Promise<{
-    transaction: string;
-    positionMint: string;
-    oldRange: { lowerBinId: number; upperBinId: number };
-    newRange: { lowerBinId: number; upperBinId: number };
-  }> {
-    try {
-      logger.info("Starting rebalance transaction preparation", {
-        positionAddress: positionInfo.address,
-        oldRange: {
-          lower: positionInfo.lowerBinId,
-          upper: positionInfo.upperBinId,
-        },
-        newRange: { lower: newLowerBinId, upper: newUpperBinId },
-      });
-
-      // Get position and pair accounts
-      const positionAccount = await this.sarosDLMM.getPositionAccount(
-        new PublicKey(positionInfo.address)
-      );
-      const pairAccount = await this.sarosDLMM.getPairAccount(
-        new PublicKey(positionInfo.poolAddress)
-      );
-      const activeBinId = pairAccount.activeId;
-
-      logger.debug("Retrieved accounts", {
-        positionMint: positionAccount.positionMint.toString(),
-        activeBinId,
-      });
-
-      // Step 1: Remove all liquidity from old position
-      const removeLiquidityTx = new Transaction();
-
-      logger.info("Preparing remove liquidity transaction");
-      const removeResult = await this.sarosDLMM.removeMultipleLiquidity({
-        maxPositionList: [
-          {
-            position: positionInfo.address,
-            start: positionInfo.lowerBinId,
-            end: positionInfo.upperBinId,
-            positionMint: positionAccount.positionMint.toString(),
-          },
-        ],
-        payer: walletPublicKey,
-        type: "removeBoth",
-        pair: new PublicKey(positionInfo.poolAddress),
-        tokenMintX: pairAccount.tokenMintX,
-        tokenMintY: pairAccount.tokenMintY,
-        activeId: pairAccount.activeId,
-      });
-
-      // Get the remove liquidity transaction
-      if (!removeResult.txs || removeResult.txs.length === 0) {
-        throw new Error("Failed to create remove liquidity transaction");
-      }
-
-      // Step 2: Create new position with optimized range
-      const relativeBinIdLeft = newLowerBinId - activeBinId;
-      const relativeBinIdRight = newUpperBinId - activeBinId;
-      const binArrayIndex = Math.floor(newLowerBinId / 70);
-
-      logger.info("Creating new position", {
-        relativeBinIdLeft,
-        relativeBinIdRight,
-        binArrayIndex,
-      });
-
-      const newPositionMint = Keypair.generate();
-      const createPositionTx = new Transaction();
-
-      await this.sarosDLMM.createPosition({
-        pair: new PublicKey(positionInfo.poolAddress),
-        payer: walletPublicKey,
-        relativeBinIdLeft,
-        relativeBinIdRight,
-        binArrayIndex,
-        positionMint: newPositionMint.publicKey,
-        transaction: createPositionTx,
-      });
-
-      // Step 3: Prepare to add liquidity to new position
-      // Calculate liquidity amounts from removed position
-      const liquidityX = parseFloat(positionInfo.liquidityX);
-      const liquidityY = parseFloat(positionInfo.liquidityY);
-
-      logger.info("Preparing add liquidity", {
-        liquidityX,
-        liquidityY,
-      });
-
-      // Get bin arrays for new position
-      const binArrayLowerIndex = Math.floor(newLowerBinId / 70);
-      const binArrayUpperIndex = Math.floor(newUpperBinId / 70);
-
-      const binArrayLower = await this.sarosDLMM.getBinArray({
-        pair: new PublicKey(positionInfo.poolAddress),
-        binArrayIndex: binArrayLowerIndex,
-        payer: walletPublicKey,
-        transaction: createPositionTx,
-      });
-
-      const binArrayUpper = await this.sarosDLMM.getBinArray({
-        pair: new PublicKey(positionInfo.poolAddress),
-        binArrayIndex: binArrayUpperIndex,
-        payer: walletPublicKey,
-        transaction: createPositionTx,
-      });
-
-      // Create liquidity distribution (spot strategy - concentrated around active bin)
-      const liquidityDistribution = [];
-      for (let binId = newLowerBinId; binId <= newUpperBinId; binId++) {
-        const relativeBinId = binId - activeBinId;
-        // Spot distribution: 100% in active bin, 0% elsewhere
-        if (binId === activeBinId) {
-          liquidityDistribution.push({
-            relativeBinId,
-            distributionX: 50,
-            distributionY: 50,
-          });
-        } else {
-          liquidityDistribution.push({
-            relativeBinId,
-            distributionX: binId < activeBinId ? 100 : 0,
-            distributionY: binId > activeBinId ? 100 : 0,
-          });
-        }
-      }
-
-      // Add liquidity to new position
-      await this.sarosDLMM.addLiquidityIntoPosition({
-        positionMint: newPositionMint.publicKey,
-        payer: walletPublicKey,
-        pair: new PublicKey(positionInfo.poolAddress),
-        transaction: createPositionTx,
-        liquidityDistribution,
-        amountX: liquidityX,
-        amountY: liquidityY,
-        binArrayLower,
-        binArrayUpper,
-      });
-
-      // Combine all transactions
-      const combinedTx = new Transaction();
-
-      // Add remove liquidity instructions
-      removeResult.txs[0].instructions.forEach((ix) => combinedTx.add(ix));
-
-      // Add create position and add liquidity instructions
-      createPositionTx.instructions.forEach((ix) => combinedTx.add(ix));
-
-      // Set transaction metadata
-      const { blockhash } =
-        await this.connection.getLatestBlockhash("finalized");
-      combinedTx.recentBlockhash = blockhash;
-      combinedTx.feePayer = walletPublicKey;
-
-      // Partial sign with new position mint
-      combinedTx.partialSign(newPositionMint);
-
-      // Serialize for client signing
-      const serializedTx = combinedTx
-        .serialize({ requireAllSignatures: false })
-        .toString("base64");
-
-      logger.info("Rebalance transaction prepared successfully", {
-        newPositionMint: newPositionMint.publicKey.toString(),
-        oldRange: {
-          lowerBinId: positionInfo.lowerBinId,
-          upperBinId: positionInfo.upperBinId,
-        },
-        newRange: { lowerBinId: newLowerBinId, upperBinId: newUpperBinId },
-      });
-
-      return {
-        transaction: serializedTx,
-        positionMint: newPositionMint.publicKey.toString(),
-        oldRange: {
-          lowerBinId: positionInfo.lowerBinId,
-          upperBinId: positionInfo.upperBinId,
-        },
-        newRange: { lowerBinId: newLowerBinId, upperBinId: newUpperBinId },
-      };
-    } catch (error) {
-      logger.error("Failed to prepare rebalance transaction", {
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      });
-      throw error;
-    }
-  }
-
   async claimFees(positionInfo: Position, wallet: Keypair): Promise<string> {
     try {
       const positionAccount = await this.sarosDLMM.getPositionAccount(
@@ -859,6 +643,275 @@ export class DLMMClient {
       return result.txs[0]?.signature?.toString() || "success";
     } catch (error) {
       console.error("Failed to claim fees:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Rebalance a position by creating a new position with optimized range
+   * Returns unsigned transaction for wallet to sign
+   */
+  async rebalancePosition(
+    positionInfo: Position,
+    newLowerBinId: number,
+    newUpperBinId: number,
+    walletPublicKey: PublicKey,
+    liquidityAmountX?: string,
+    liquidityAmountY?: string
+  ): Promise<{
+    transaction: string;
+    positionMint: string;
+    oldRange: { lowerBinId: number; upperBinId: number };
+    newRange: { lowerBinId: number; upperBinId: number };
+    activeBinId: number;
+  }> {
+    try {
+      logger.info("Starting rebalance transaction preparation", {
+        positionAddress: positionInfo.address,
+        oldRange: {
+          lower: positionInfo.lowerBinId,
+          upper: positionInfo.upperBinId,
+        },
+        newRange: { lower: newLowerBinId, upper: newUpperBinId },
+        liquidityAmounts:
+          liquidityAmountX || liquidityAmountY
+            ? {
+                tokenX: liquidityAmountX || "0",
+                tokenY: liquidityAmountY || "0",
+              }
+            : "none (empty position)",
+      });
+
+      // Get position and pair accounts - CRITICAL: fetch LATEST on-chain active bin
+      const positionAccount = await this.sarosDLMM.getPositionAccount(
+        new PublicKey(positionInfo.address)
+      );
+      const pairAccount = await this.sarosDLMM.getPairAccount(
+        new PublicKey(positionInfo.poolAddress)
+      );
+      const activeBinId = pairAccount.activeId;
+
+      logger.info("Retrieved LATEST on-chain accounts", {
+        positionMint: positionAccount.positionMint.toString(),
+        activeBinId,
+        providedNewRange: { lower: newLowerBinId, upper: newUpperBinId },
+      });
+
+      // Enforce standard 16-bin position (relative width = 15)
+      const expectedWidth = 15;
+      if (newUpperBinId - newLowerBinId !== expectedWidth) {
+        logger.warn("Adjusting to standard 16-bin position");
+        newLowerBinId = activeBinId - 7; // relativeLeft = -7
+        newUpperBinId = activeBinId + 8; // relativeRight = 8, width = 15
+      }
+
+      const relativeBinIdLeft = newLowerBinId - activeBinId; // Must be negative, e.g., -7
+      const relativeBinIdRight = newUpperBinId - activeBinId; // Must be positive, e.g., 8
+
+      // Bin array size in Saros DLMM: 256 bins per array
+      const BIN_ARRAY_SIZE = 256;
+      const binArrayIndex = Math.floor(newLowerBinId / BIN_ARRAY_SIZE);
+
+      // Calculate array span
+      const lowerArrayIndex = Math.floor(newLowerBinId / BIN_ARRAY_SIZE);
+      const upperArrayIndex = Math.floor(newUpperBinId / BIN_ARRAY_SIZE);
+      if (upperArrayIndex - lowerArrayIndex > 1) {
+        throw new Error(
+          `Position spans more than 2 bin arrays: ${upperArrayIndex - lowerArrayIndex + 1}`
+        );
+      }
+
+      const inclusiveBins = newUpperBinId - newLowerBinId + 1; // Should be 16
+      if (inclusiveBins !== 16) {
+        throw new Error(
+          `Invalid inclusive bin count: ${inclusiveBins} (must be 16)`
+        );
+      }
+
+      logger.info("Bin range details (16 bins)", {
+        activeBinId,
+        newLowerBinId,
+        newUpperBinId,
+        relativeBinIdLeft,
+        relativeBinIdRight,
+        binArrayIndex,
+        arraySpan: upperArrayIndex - lowerArrayIndex + 1,
+        inclusiveBins,
+      });
+
+      // Validate bin range - CRITICAL: relativeBinIdLeft must be NEGATIVE and relativeBinIdRight POSITIVE
+      if (relativeBinIdLeft >= 0) {
+        throw new Error(
+          `Invalid left bin: ${relativeBinIdLeft} must be negative (left of active bin ${activeBinId})`
+        );
+      }
+
+      if (relativeBinIdRight <= 0) {
+        throw new Error(
+          `Invalid right bin: ${relativeBinIdRight} must be positive (right of active bin ${activeBinId})`
+        );
+      }
+
+      // Ensure active bin is strictly within the range
+      if (!(activeBinId > newLowerBinId && activeBinId < newUpperBinId)) {
+        throw new Error(
+          `Active bin ${activeBinId} is not strictly within range [${newLowerBinId}, ${newUpperBinId}]`
+        );
+      }
+
+      const newPositionMint = Keypair.generate();
+      const createPositionTx = new Transaction();
+
+      logger.info("Calling DLMM createPosition with params", {
+        pair: positionInfo.poolAddress,
+        payer: walletPublicKey.toString(),
+        relativeBinIdLeft,
+        relativeBinIdRight,
+        binArrayIndex,
+        positionMint: newPositionMint.publicKey.toString(),
+        validation: {
+          leftIsNegative: relativeBinIdLeft < 0,
+          rightIsPositive: relativeBinIdRight > 0,
+          activeBinInRange:
+            activeBinId > newLowerBinId && activeBinId < newUpperBinId,
+          inclusiveBins,
+        },
+        absoluteBins: {
+          newLowerBinId,
+          newUpperBinId,
+          activeBinId,
+        },
+        binArrayCalculation: {
+          formula: "Math.floor(newLowerBinId / 256)",
+          newLowerBinId,
+          division: newLowerBinId / 256,
+          result: binArrayIndex,
+        },
+      });
+
+      console.log("\n=== CRITICAL DEBUG: BIN ARRAY INDEX CALCULATION ===");
+      console.log("newLowerBinId:", newLowerBinId);
+      console.log("newUpperBinId:", newUpperBinId);
+      console.log("activeBinId:", activeBinId);
+      console.log("relativeBinIdLeft:", relativeBinIdLeft, "(should be < 0)");
+      console.log("relativeBinIdRight:", relativeBinIdRight, "(should be > 0)");
+      console.log(
+        "binArrayIndex calculation: Math.floor(" + newLowerBinId + " / 256) =",
+        binArrayIndex
+      );
+      console.log("Inclusive bins:", inclusiveBins, "(should =16)");
+      console.log(
+        "Array span:",
+        upperArrayIndex - lowerArrayIndex + 1,
+        "(should <=2)"
+      );
+      console.log("=== END CRITICAL DEBUG ===\n");
+
+      // Create position
+      await this.sarosDLMM.createPosition({
+        pair: new PublicKey(positionInfo.poolAddress),
+        payer: walletPublicKey,
+        relativeBinIdLeft,
+        relativeBinIdRight,
+        binArrayIndex,
+        positionMint: newPositionMint.publicKey,
+        transaction: createPositionTx,
+      });
+
+      logger.info("DLMM createPosition call completed successfully");
+
+      // Initialize all spanned bin arrays
+      for (let idx = lowerArrayIndex; idx <= upperArrayIndex; idx++) {
+        await this.sarosDLMM.getBinArray({
+          pair: new PublicKey(positionInfo.poolAddress),
+          binArrayIndex: idx,
+          payer: walletPublicKey,
+          transaction: createPositionTx,
+        });
+        logger.debug("Initialized bin array", { index: idx });
+      }
+
+      // Add liquidity if provided
+      if (liquidityAmountX || liquidityAmountY) {
+        const minLiquidityX = Number(liquidityAmountX || "0");
+        const minLiquidityY = Number(liquidityAmountY || "0");
+
+        logger.info("Adding liquidity to new position", {
+          amountX: minLiquidityX,
+          amountY: minLiquidityY,
+        });
+
+        // Get bin arrays for addition
+        const binArrayLower = await this.sarosDLMM.getBinArray({
+          pair: new PublicKey(positionInfo.poolAddress),
+          binArrayIndex: lowerArrayIndex,
+        });
+        const binArrayUpper = await this.sarosDLMM.getBinArray({
+          pair: new PublicKey(positionInfo.poolAddress),
+          binArrayIndex: upperArrayIndex,
+        });
+
+        // Liquidity distribution for 16 bins
+        const liquidityDistribution = [];
+        for (let binId = newLowerBinId; binId <= newUpperBinId; binId++) {
+          liquidityDistribution.push({
+            relativeBinId: binId - activeBinId,
+            distributionX: 50,
+            distributionY: 50,
+          });
+        }
+
+        await this.sarosDLMM.addLiquidityIntoPosition({
+          pair: new PublicKey(positionInfo.poolAddress),
+          payer: walletPublicKey,
+          positionMint: newPositionMint.publicKey,
+          amountX: minLiquidityX,
+          amountY: minLiquidityY,
+          transaction: createPositionTx,
+          liquidityDistribution,
+          binArrayLower,
+          binArrayUpper,
+        });
+
+        logger.info("Liquidity added to new position successfully");
+      }
+
+      // Serialize transaction
+      const { blockhash } =
+        await this.connection.getLatestBlockhash("finalized");
+      createPositionTx.recentBlockhash = blockhash;
+      createPositionTx.feePayer = walletPublicKey;
+      createPositionTx.partialSign(newPositionMint);
+
+      const serializedTx = createPositionTx
+        .serialize({ requireAllSignatures: false })
+        .toString("base64");
+
+      logger.info("Rebalance transaction prepared successfully", {
+        newPositionMint: newPositionMint.publicKey.toString(),
+        oldRange: {
+          lowerBinId: positionInfo.lowerBinId,
+          upperBinId: positionInfo.upperBinId,
+        },
+        newRange: { lowerBinId: newLowerBinId, upperBinId: newUpperBinId },
+        txSize: serializedTx.length,
+      });
+
+      return {
+        transaction: serializedTx,
+        positionMint: newPositionMint.publicKey.toString(),
+        oldRange: {
+          lowerBinId: positionInfo.lowerBinId,
+          upperBinId: positionInfo.upperBinId,
+        },
+        newRange: { lowerBinId: newLowerBinId, upperBinId: newUpperBinId },
+        activeBinId,
+      };
+    } catch (error) {
+      logger.error("Failed to prepare rebalance transaction", {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
       throw error;
     }
   }

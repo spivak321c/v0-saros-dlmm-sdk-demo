@@ -12,17 +12,26 @@ import { useWalletPositions } from "../hooks/use-wallet-positions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
+import { useWebSocket } from "@/lib/websocket";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Dashboard() {
   const { publicKey } = useWallet();
   const navigate = useNavigate();
   const { data: positions, isLoading } = useWalletPositions();
+  const { lastMessage } = useWebSocket();
+  const { toast } = useToast();
   const [stats, setStats] = useState({
     totalValue: 0,
     totalFees: 0,
     activePositions: 0,
     avgAPY: 0,
   });
+  const [autoRebalanceStatus, setAutoRebalanceStatus] = useState<{
+    enabled: boolean;
+    threshold: number;
+    lastCheck?: number;
+  } | null>(null);
 
   useEffect(() => {
     if (positions && positions.length > 0) {
@@ -48,6 +57,31 @@ export default function Dashboard() {
       });
     }
   }, [positions]);
+
+  // Listen for WebSocket updates
+  useEffect(() => {
+    if (!lastMessage) return;
+
+    if (lastMessage.type === "auto_rebalance_status") {
+      setAutoRebalanceStatus(lastMessage.data);
+    } else if (lastMessage.type === "alert") {
+      const alert = lastMessage.data;
+      toast({
+        title: alert.title,
+        description: alert.message,
+        variant: alert.type === "error" ? "destructive" : "default",
+      });
+    } else if (lastMessage.type === "rebalance_event") {
+      const event = lastMessage.data;
+      toast({
+        title: "Rebalance Completed",
+        description: `Position ${event.positionAddress.slice(
+          0,
+          8
+        )}... has been rebalanced`,
+      });
+    }
+  }, [lastMessage, toast]);
 
   if (!publicKey) {
     return (

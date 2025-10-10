@@ -2,8 +2,8 @@
  * Type definitions for Saros DLMM server
  */
 
-import { PublicKey } from '@solana/web3.js';
-import BN from 'bn.js';
+import { PublicKey } from "@solana/web3.js";
+import BN from "bn.js";
 
 // Position Types
 export interface DLMMPosition {
@@ -46,7 +46,7 @@ export interface RiskMetrics {
   valueAtRisk: number; // VaR at 95% confidence
   sharpeRatio: number;
   maxDrawdown: number;
-  currentRisk: 'low' | 'medium' | 'high';
+  currentRisk: "low" | "medium" | "high";
 }
 
 // Rebalancing Types
@@ -56,6 +56,9 @@ export interface RebalanceParams {
   slippageBps: number;
   minLiquidity?: BN;
   maxLiquidity?: BN;
+  // For manual rebalancing: user-specified liquidity amounts
+  liquidityAmountX?: BN;
+  liquidityAmountY?: BN;
 }
 
 export interface RebalanceResult {
@@ -118,7 +121,7 @@ export interface StopLossEvent {
 // Automation Types
 export interface AutomationJob {
   id: string;
-  type: 'rebalance' | 'monitor' | 'stop-loss';
+  type: "rebalance" | "monitor" | "stop-loss";
   positionKey: PublicKey;
   config: Record<string, any>;
   enabled: boolean;

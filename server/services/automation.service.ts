@@ -3,19 +3,19 @@
  * Handles scheduled automated tasks like rebalancing and monitoring
  */
 
-import { PublicKey, Keypair } from '@solana/web3.js';
-import { config } from '../config';
-import { logger } from '../utils/logger';
+import { PublicKey, Keypair } from "@solana/web3.js";
+import { config } from "../config";
+import { logger } from "../utils/logger";
 import {
   AutomationJob,
   AutomationResult,
   RebalanceParams,
   ApiResponse,
-} from '../types';
-import { ValidationError } from '../utils/errors';
-import { RebalanceService } from './rebalance.service';
-import { StopLossService } from './stoploss.service';
-import { DLMMService } from './dlmm.service';
+} from "../types";
+import { ValidationError } from "../utils/errors";
+import { RebalanceService } from "./rebalance.service";
+import { StopLossService } from "./stoploss.service";
+import { DLMMService } from "./dlmm.service";
 
 export class AutomationService {
   private rebalanceService: RebalanceService;
@@ -30,17 +30,15 @@ export class AutomationService {
     this.dlmmService = new DLMMService();
     this.jobs = new Map();
     this.intervals = new Map();
-    logger.info('Automation Service initialized');
+    logger.info("Automation Service initialized");
   }
 
   /**
    * Register an automation job
    */
-  async registerJob(
-    job: AutomationJob
-  ): Promise<ApiResponse<AutomationJob>> {
+  async registerJob(job: AutomationJob): Promise<ApiResponse<AutomationJob>> {
     try {
-      logger.info('Registering automation job', {
+      logger.info("Registering automation job", {
         id: job.id,
         type: job.type,
         position: job.positionKey.toString(),
@@ -57,7 +55,7 @@ export class AutomationService {
         await this.scheduleJob(job);
       }
 
-      logger.info('Automation job registered', {
+      logger.info("Automation job registered", {
         id: job.id,
         enabled: job.enabled,
       });
@@ -68,7 +66,7 @@ export class AutomationService {
         timestamp: Date.now(),
       };
     } catch (error: any) {
-      logger.error('Failed to register automation job', {
+      logger.error("Failed to register automation job", {
         id: job.id,
         error: error.message,
       });
@@ -86,7 +84,7 @@ export class AutomationService {
    */
   async unregisterJob(jobId: string): Promise<ApiResponse<boolean>> {
     try {
-      logger.info('Unregistering automation job', { id: jobId });
+      logger.info("Unregistering automation job", { id: jobId });
 
       // Cancel scheduled interval
       this.cancelJob(jobId);
@@ -100,7 +98,7 @@ export class AutomationService {
         timestamp: Date.now(),
       };
     } catch (error: any) {
-      logger.error('Failed to unregister automation job', {
+      logger.error("Failed to unregister automation job", {
         id: jobId,
         error: error.message,
       });
@@ -117,7 +115,7 @@ export class AutomationService {
     signerKeypair: Keypair
   ): Promise<ApiResponse<AutomationResult>> {
     try {
-      logger.info('Executing automation job', { id: jobId });
+      logger.info("Executing automation job", { id: jobId });
 
       const job = this.jobs.get(jobId);
       if (!job) {
@@ -136,7 +134,7 @@ export class AutomationService {
         timestamp: Date.now(),
       };
     } catch (error: any) {
-      logger.error('Failed to execute automation job', {
+      logger.error("Failed to execute automation job", {
         id: jobId,
         error: error.message,
       });
@@ -155,18 +153,18 @@ export class AutomationService {
     let intervalMs: number;
 
     switch (job.type) {
-      case 'rebalance':
+      case "rebalance":
         intervalMs = config.automation.rebalanceIntervalMs;
         break;
-      case 'monitor':
-      case 'stop-loss':
+      case "monitor":
+      case "stop-loss":
         intervalMs = config.automation.monitoringIntervalMs;
         break;
       default:
         throw new ValidationError(`Unknown job type: ${job.type}`);
     }
 
-    logger.info('Scheduling job', {
+    logger.info("Scheduling job", {
       id: job.id,
       type: job.type,
       intervalMs,
@@ -176,7 +174,7 @@ export class AutomationService {
       try {
         // Note: In production, you'd need to securely manage keypairs
         // This is a placeholder - actual implementation would need proper key management
-        logger.debug('Auto-executing job', { id: job.id });
+        logger.debug("Auto-executing job", { id: job.id });
 
         // For now, we just log that the job would run
         // In production, you'd execute with proper credentials
@@ -184,7 +182,7 @@ export class AutomationService {
         job.nextRun = Date.now() + intervalMs;
         this.jobs.set(job.id, job);
       } catch (error: any) {
-        logger.error('Error in scheduled job execution', {
+        logger.error("Error in scheduled job execution", {
           id: job.id,
           error: error.message,
         });
@@ -206,7 +204,7 @@ export class AutomationService {
     if (interval) {
       clearInterval(interval);
       this.intervals.delete(jobId);
-      logger.debug('Cancelled job interval', { id: jobId });
+      logger.debug("Cancelled job interval", { id: jobId });
     }
   }
 
@@ -224,18 +222,25 @@ export class AutomationService {
       let details: Record<string, any> = {};
 
       switch (job.type) {
-        case 'rebalance':
-          action = 'rebalance';
+        case "rebalance":
+          action = "rebalance";
           const rebalanceParams = job.config as RebalanceParams;
+
+          // For automated rebalancing, we don't specify liquidity amounts
+          // The rebalance service will handle liquidity transfer internally
+          const automatedParams = {
+            ...rebalanceParams,
+          };
+
           const rebalanceResult = await this.rebalanceService.rebalancePosition(
-            rebalanceParams,
+            automatedParams,
             signerKeypair
           );
           details = rebalanceResult.data || {};
           break;
 
-        case 'stop-loss':
-          action = 'stop-loss-check';
+        case "stop-loss":
+          action = "stop-loss-check";
           const stopLossResult = await this.stopLossService.checkStopLoss(
             job.positionKey.toString(),
             signerKeypair
@@ -243,8 +248,8 @@ export class AutomationService {
           details = stopLossResult.data || {};
           break;
 
-        case 'monitor':
-          action = 'monitor';
+        case "monitor":
+          action = "monitor";
           const metricsResult = await this.dlmmService.getPositionMetrics(
             job.positionKey.toString()
           );
@@ -255,7 +260,7 @@ export class AutomationService {
           throw new ValidationError(`Unknown job type: ${job.type}`);
       }
 
-      logger.info('Job executed successfully', {
+      logger.info("Job executed successfully", {
         id: job.id,
         action,
         duration: Date.now() - startTime,
@@ -269,7 +274,7 @@ export class AutomationService {
         timestamp: Date.now(),
       };
     } catch (error: any) {
-      logger.error('Job execution failed', {
+      logger.error("Job execution failed", {
         id: job.id,
         error: error.message,
       });
@@ -289,16 +294,16 @@ export class AutomationService {
    * Validate automation job
    */
   private validateJob(job: AutomationJob): void {
-    if (!job.id || job.id.trim() === '') {
-      throw new ValidationError('Job ID is required');
+    if (!job.id || job.id.trim() === "") {
+      throw new ValidationError("Job ID is required");
     }
 
-    if (!['rebalance', 'monitor', 'stop-loss'].includes(job.type)) {
+    if (!["rebalance", "monitor", "stop-loss"].includes(job.type)) {
       throw new ValidationError(`Invalid job type: ${job.type}`);
     }
 
     if (!job.positionKey) {
-      throw new ValidationError('Position key is required');
+      throw new ValidationError("Position key is required");
     }
   }
 
@@ -362,7 +367,7 @@ export class AutomationService {
    * Cleanup: cancel all jobs and clear state
    */
   cleanup(): void {
-    logger.info('Cleaning up automation service');
+    logger.info("Cleaning up automation service");
 
     for (const jobId of this.intervals.keys()) {
       this.cancelJob(jobId);
@@ -371,6 +376,6 @@ export class AutomationService {
     this.jobs.clear();
     this.intervals.clear();
 
-    logger.info('Automation service cleaned up');
+    logger.info("Automation service cleaned up");
   }
 }

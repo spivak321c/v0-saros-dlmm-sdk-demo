@@ -3,11 +3,17 @@ import { dlmmClient } from "../solana/dlmm-client";
 import storage from "../storage";
 import { ilCalculator } from "../utils/il-calculator";
 import { logger } from "../utils/logger";
-import type { PositionData } from "../../shared/schema";
+import { wsServer } from "./websocket-server";
+import type { PositionData, RebalanceParams } from "../../shared/schema";
 
 export class PositionMonitor {
   private monitoringInterval: NodeJS.Timeout | null = null;
-  private readonly UPDATE_INTERVAL = 30000; // 30 seconds
+  private rebalanceCheckInterval: NodeJS.Timeout | null = null;
+  private readonly UPDATE_INTERVAL = 60000; // 60 seconds to avoid rate limiting
+  private readonly REBALANCE_CHECK_INTERVAL = 300000; // 5 minutes
+  private monitoredWallets: string[] = [];
+  private lastUpdateTime = 0;
+  private readonly MIN_UPDATE_DELAY = 2000; // Minimum 2 seconds between updates
 
   async loadPositionData(
     positionAddress: string
@@ -101,6 +107,13 @@ export class PositionMonitor {
         currentValue,
         isInRange,
       });
+
+      // Broadcast position update via WebSocket
+      wsServer.broadcast({
+        type: "position_update",
+        data: positionData,
+      });
+
       return positionData;
     } catch (error) {
       logger.error("Failed to load position data", {
@@ -113,6 +126,17 @@ export class PositionMonitor {
 
   async loadUserPositions(walletAddress: string): Promise<PositionData[]> {
     try {
+      // Rate limiting check
+      const now = Date.now();
+      if (now - this.lastUpdateTime < this.MIN_UPDATE_DELAY) {
+        logger.debug("[RateLimit] Skipping update", {
+          walletAddress,
+          timeSinceLastUpdate: now - this.lastUpdateTime,
+        });
+        return [];
+      }
+      this.lastUpdateTime = now;
+
       logger.info("Loading user positions", { walletAddress });
       const positions = await dlmmClient.getUserPositions(
         new PublicKey(walletAddress)
@@ -131,6 +155,9 @@ export class PositionMonitor {
         if (data) {
           positionsData.push(data);
         }
+
+        // Add delay between position loads to avoid rate limiting
+        await new Promise((resolve) => setTimeout(resolve, 500));
       }
 
       logger.info("User positions loaded successfully", {
@@ -152,18 +179,151 @@ export class PositionMonitor {
       clearInterval(this.monitoringInterval);
     }
 
+    this.monitoredWallets = walletAddresses;
+
     logger.info("Starting position monitoring", {
       walletCount: walletAddresses.length,
       intervalMs: this.UPDATE_INTERVAL,
     });
-    this.monitoringInterval = setInterval(async () => {
-      logger.debug("Running position monitoring cycle");
+
+    // Initial load
+    (async () => {
       for (const address of walletAddresses) {
         await this.loadUserPositions(address);
+      }
+    })();
+
+    // Regular monitoring with rate limiting
+    this.monitoringInterval = setInterval(async () => {
+      logger.debug("[Monitor] Running position monitoring cycle", {
+        walletCount: walletAddresses.length,
+      });
+      for (const address of walletAddresses) {
+        try {
+          await this.loadUserPositions(address);
+          // Add delay between wallet checks
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        } catch (error) {
+          logger.error("[Monitor] Error in monitoring cycle", {
+            address,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
     }, this.UPDATE_INTERVAL);
 
     logger.info("Position monitoring started successfully");
+  }
+
+  startAutoRebalancing(threshold: number = 5) {
+    if (this.rebalanceCheckInterval) {
+      clearInterval(this.rebalanceCheckInterval);
+    }
+
+    logger.info("Starting auto-rebalancing checks", {
+      threshold,
+      intervalMs: this.REBALANCE_CHECK_INTERVAL,
+    });
+
+    this.rebalanceCheckInterval = setInterval(async () => {
+      await this.checkAndTriggerRebalances(threshold);
+    }, this.REBALANCE_CHECK_INTERVAL);
+
+    // Initial check
+    this.checkAndTriggerRebalances(threshold);
+
+    logger.info("Auto-rebalancing started successfully");
+  }
+
+  private async checkAndTriggerRebalances(threshold: number) {
+    logger.debug(
+      "[AutoRebalance] Checking positions for rebalancing opportunities",
+      { positionCount: storage.getAllPositions().length }
+    );
+    const allPositions = storage.getAllPositions();
+
+    for (const positionData of allPositions) {
+      try {
+        const shouldRebalance = await this.shouldRebalance(
+          positionData,
+          threshold
+        );
+
+        // Add delay between checks to avoid rate limiting
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        if (shouldRebalance) {
+          logger.info("Position needs rebalancing", {
+            positionAddress: positionData.position.address,
+            isInRange: positionData.riskMetrics.isInRange,
+            priceDistance: positionData.riskMetrics.priceDistance,
+          });
+
+          // Create alert for rebalancing opportunity
+          const alert = {
+            id: `rebalance_alert_${Date.now()}_${positionData.position.address}`,
+            type: "warning" as const,
+            title: "Rebalance Recommended",
+            message: `Position ${positionData.position.address.slice(0, 8)}... is ${positionData.riskMetrics.isInRange ? "approaching range boundary" : "out of range"}`,
+            positionAddress: positionData.position.address,
+            timestamp: Date.now(),
+            read: false,
+          };
+
+          storage.addAlert(alert);
+
+          // Broadcast alert via WebSocket
+          wsServer.broadcast({
+            type: "alert",
+            data: alert,
+          });
+
+          // Broadcast rebalance status update
+          wsServer.broadcast({
+            type: "rebalance_check",
+            data: {
+              positionAddress: positionData.position.address,
+              shouldRebalance: true,
+              reason: positionData.riskMetrics.isInRange
+                ? "approaching_boundary"
+                : "out_of_range",
+              timestamp: Date.now(),
+            },
+          });
+        }
+      } catch (error) {
+        logger.error("Failed to check position for rebalancing", {
+          positionAddress: positionData.position.address,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  }
+
+  private async shouldRebalance(
+    positionData: PositionData,
+    threshold: number
+  ): Promise<boolean> {
+    const { pool, position, riskMetrics } = positionData;
+
+    // Check if position is out of range
+    if (!riskMetrics.isInRange) {
+      return true;
+    }
+
+    // Check if price is close to range boundaries
+    const distanceToLower = Math.abs(pool.activeId - position.lowerBinId);
+    const distanceToUpper = Math.abs(pool.activeId - position.upperBinId);
+    const positionWidth = position.upperBinId - position.lowerBinId;
+
+    const minDistance = Math.min(distanceToLower, distanceToUpper);
+    const distancePercentage = (minDistance / positionWidth) * 100;
+
+    if (distancePercentage < threshold) {
+      return true;
+    }
+
+    return false;
   }
 
   stopMonitoring() {
@@ -172,6 +332,14 @@ export class PositionMonitor {
       this.monitoringInterval = null;
       logger.info("Position monitoring stopped");
     }
+
+    if (this.rebalanceCheckInterval) {
+      clearInterval(this.rebalanceCheckInterval);
+      this.rebalanceCheckInterval = null;
+      logger.info("Auto-rebalancing stopped");
+    }
+
+    this.monitoredWallets = [];
   }
 }
 

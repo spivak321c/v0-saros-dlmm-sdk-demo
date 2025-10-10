@@ -14,21 +14,34 @@ export class WSServer {
     this.wss = new WebSocket.Server({ server, path: "/ws" });
 
     this.wss.on("connection", (ws: any) => {
-      logger.info("WebSocket client connected", {
+      logger.info("[WebSocket] Client connected", {
         totalClients: this.clients.size + 1,
       });
       this.clients.add(ws);
 
       ws.on("close", () => {
-        logger.info("WebSocket client disconnected", {
+        logger.info("[WebSocket] Client disconnected", {
           totalClients: this.clients.size - 1,
         });
         this.clients.delete(ws);
       });
 
       ws.on("error", (error: any) => {
-        logger.error("WebSocket client error", { error: error.message });
+        logger.error("[WebSocket] Client error", { error: error.message });
         this.clients.delete(ws);
+      });
+
+      ws.on("message", (data: any) => {
+        try {
+          const message = JSON.parse(data.toString());
+          logger.debug("[WebSocket] Received message from client", {
+            type: message.type,
+          });
+        } catch (error) {
+          logger.error("[WebSocket] Failed to parse client message", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
       });
 
       // Send initial data
@@ -72,10 +85,10 @@ export class WSServer {
   }
 
   private startPeriodicUpdates() {
-    logger.info("Starting periodic WebSocket updates", { intervalMs: 5000 });
+    logger.info("Starting periodic WebSocket updates", { intervalMs: 60000 });
     this.updateInterval = setInterval(() => {
       this.broadcastUpdates();
-    }, 5000); // Update every 5 seconds
+    }, 60000); // Update every 60 seconds to avoid rate limiting
   }
 
   private broadcastUpdates() {
@@ -105,10 +118,23 @@ export class WSServer {
 
   broadcast(message: WSMessage) {
     const data = JSON.stringify(message);
+    logger.debug("[WebSocket] Broadcasting message", {
+      type: message.type,
+      clientCount: this.clients.size,
+    });
 
     this.clients.forEach((client) => {
       if (client.readyState === WebSocket.OPEN) {
-        client.send(data);
+        try {
+          client.send(data);
+          logger.debug("[WebSocket] Message sent to client", {
+            type: message.type,
+          });
+        } catch (error) {
+          logger.error("[WebSocket] Failed to send message to client", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
     });
   }
@@ -134,6 +160,17 @@ export class WSServer {
     this.broadcast({
       type: "rebalance_event",
       data: event,
+    });
+  }
+
+  broadcastAutoRebalanceStatus(status: {
+    enabled: boolean;
+    threshold: number;
+    lastCheck?: number;
+  }) {
+    this.broadcast({
+      type: "auto_rebalance_status",
+      data: status,
     });
   }
 }

@@ -11,9 +11,9 @@ export const PositionSchema = z.object({
   liquidityY: z.string(),
   feeX: z.string(),
   feeY: z.string(),
-  rewardOne: z.string(),
-  rewardTwo: z.string(),
-  lastUpdatedAt: z.number(),
+  rewardOne: z.string().optional(),
+  rewardTwo: z.string().optional(),
+  lastUpdatedAt: z.number().optional(),
   createdAt: z.number(),
 });
 
@@ -75,6 +75,9 @@ export const RebalanceParamsSchema = z.object({
   newLowerBinId: z.number(),
   newUpperBinId: z.number(),
   reason: z.string(),
+  // Optional: for manual rebalancing with user-specified liquidity
+  liquidityAmountX: z.string().optional(),
+  liquidityAmountY: z.string().optional(),
 });
 
 export const RebalanceEventSchema = z.object({
@@ -126,6 +129,23 @@ export const WSMessageSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("rebalance_event"),
     data: RebalanceEventSchema,
+  }),
+  z.object({
+    type: z.literal("auto_rebalance_status"),
+    data: z.object({
+      enabled: z.boolean(),
+      threshold: z.number(),
+      lastCheck: z.number().optional(),
+    }),
+  }),
+  z.object({
+    type: z.literal("rebalance_check"),
+    data: z.object({
+      positionAddress: z.string(),
+      shouldRebalance: z.boolean(),
+      reason: z.string(),
+      timestamp: z.number(),
+    }),
   }),
 ]);
 

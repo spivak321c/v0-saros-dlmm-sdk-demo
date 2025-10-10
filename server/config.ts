@@ -6,25 +6,28 @@
 export const config = {
   // Solana RPC Configuration
   solana: {
-    rpcUrl: process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com',
-    network: process.env.SOLANA_NETWORK || 'devnet',
-    commitment: 'confirmed' as const,
+    rpcUrl: process.env.SOLANA_RPC_URL || "https://api.devnet.solana.com",
+    network: process.env.SOLANA_NETWORK || "devnet",
+    commitment: "confirmed" as const,
   },
 
   // Wallet Configuration
   wallet: {
-    privateKey: process.env.WALLET_PRIVATE_KEY || '',
+    privateKey: process.env.WALLET_PRIVATE_KEY || "",
   },
 
   // Telegram Bot Configuration
   telegram: {
-    botToken: process.env.TELEGRAM_BOT_TOKEN || '',
-    chatId: process.env.TELEGRAM_CHAT_ID || '',
+    botToken: process.env.TELEGRAM_BOT_TOKEN || "",
+    chatId: process.env.TELEGRAM_CHAT_ID || "",
   },
 
   // Saros DLMM Configuration
   saros: {
-    programId: process.env.SAROS_PROGRAM_ID || 'SarosV1DLMM1111111111111111111111111111111',
+    // Official Saros DLMM Program ID for Devnet
+    programId:
+      process.env.SAROS_PROGRAM_ID ||
+      "EZoLi7fVCWjns7ukzjggSeDpG2GEGJbGs3MTRxAE29d4",
     maxRetries: 3,
     retryDelay: 1000, // ms
   },
@@ -38,27 +41,30 @@ export const config = {
 
   // Rebalancing Settings
   rebalancing: {
-    intervalMinutes: parseInt(process.env.REBALANCE_INTERVAL_MINUTES || '15'),
-    volatilityThreshold: parseFloat(process.env.VOLATILITY_THRESHOLD || '0.05'),
-    outOfRangeThreshold: parseFloat(process.env.OUT_OF_RANGE_THRESHOLD || '0.1'),
-    minFeeThreshold: parseFloat(process.env.MIN_FEE_THRESHOLD || '0.001'),
+    intervalMinutes: parseInt(process.env.REBALANCE_INTERVAL_MINUTES || "15"),
+    volatilityThreshold: parseFloat(process.env.VOLATILITY_THRESHOLD || "0.05"),
+    outOfRangeThreshold: parseFloat(
+      process.env.OUT_OF_RANGE_THRESHOLD || "0.1"
+    ),
+    minFeeThreshold: parseFloat(process.env.MIN_FEE_THRESHOLD || "0.001"),
     minVolatilityThreshold: 0.05, // 5%
-    maxVolatilityThreshold: 0.50, // 50%
+    maxVolatilityThreshold: 0.5, // 50%
     defaultSlippageBps: 50, // 0.5%
     maxSlippageBps: 500, // 5%
   },
 
   // Stop-Loss Settings
   stopLoss: {
-    enabled: process.env.ENABLE_STOP_LOSS === 'true',
-    percentage: parseFloat(process.env.STOP_LOSS_PERCENTAGE || '0.15'),
-    defaultThreshold: 0.10, // 10% loss
+    enabled: process.env.ENABLE_STOP_LOSS === "true",
+    percentage: parseFloat(process.env.STOP_LOSS_PERCENTAGE || "0.15"),
+    defaultThreshold: 0.1, // 10% loss
     checkIntervalMs: 60000, // 1 minute
   },
 
   // Monitored Pools
   pools: {
-    monitored: process.env.MONITORED_POOLS?.split(',').map(p => p.trim()) || [],
+    monitored:
+      process.env.MONITORED_POOLS?.split(",").map((p) => p.trim()) || [],
   },
 
   // Automation Settings
@@ -69,7 +75,7 @@ export const config = {
 
   // Logging
   logging: {
-    level: process.env.LOG_LEVEL || 'info',
+    level: process.env.LOG_LEVEL || "info",
     enableConsole: true,
   },
 } as const;

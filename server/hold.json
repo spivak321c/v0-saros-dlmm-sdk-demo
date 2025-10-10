@@ -1,0 +1,77 @@
+{
+  "positions": {
+    "9uzicNJ7NJ7vY6HPap3sfK64hvfGt1SYbNfvZUTwJr8b": {
+      "position": {
+        "address": "9uzicNJ7NJ7vY6HPap3sfK64hvfGt1SYbNfvZUTwJr8b",
+        "poolAddress": "6CrcbhdYbzQTFU8bFfY8kZHVD2K3P2G4mS8jZGq318zi",
+        "owner": "",
+        "lowerBinId": 8388836,
+        "upperBinId": 8388838,
+        "liquidityX": "0",
+        "liquidityY": "0",
+        "feeX": "0",
+        "feeY": "0",
+        "rewardOne": "0",
+        "rewardTwo": "0",
+        "lastUpdatedAt": 1760053813554,
+        "createdAt": 1760053813554
+      },
+      "pool": {
+        "address": "6CrcbhdYbzQTFU8bFfY8kZHVD2K3P2G4mS8jZGq318zi",
+        "tokenX": {
+          "mint": "mnt72NV74VfWGbSJqYswLbgPds22hVvspjqBzi7dc4j",
+          "symbol": "mnt7...dc4j",
+          "decimals": 6
+        },
+        "tokenY": {
+          "mint": "mntCAkd76nKSVTYxwu8qwQnhPcEE9JyEbgW6eEpwr1N",
+          "symbol": "mntC...wr1N",
+          "decimals": 6
+        },
+        "binStep": 50,
+        "activeId": 8388838,
+        "currentPrice": 3.1491562113422487,
+        "tvl": 0,
+        "volume24h": 0,
+        "fees24h": 0
+      },
+      "currentValue": 0,
+      "feesEarned": {
+        "tokenX": 0,
+        "tokenY": 0,
+        "total": 0
+      },
+      "performance": {
+        "totalReturn": 0,
+        "dailyYield": 0,
+        "impermanentLoss": 0
+      },
+      "riskMetrics": {
+        "concentration": 0.5,
+        "priceDistance": 0,
+        "utilizationRate": 0.5,
+        "isInRange": true
+      }
+    }
+  },
+  "rebalanceEvents": [],
+  "alerts": [],
+  "stopLossConfigs": {},
+  "settings": {
+    "telegram": {
+      "enabled": false,
+      "botToken": "",
+      "chatId": ""
+    },
+    "rebalancing": {
+      "enabled": false,
+      "intervalMinutes": 15,
+      "volatilityThreshold": 0.05
+    },
+    "monitoring": {
+      "enabled": false,
+      "pools": []
+    },
+    "monitoredWallet": "4LuwejxiFouDRAaEP4V8UkRFkyQm1xBspCPhzuVPH7XJ"
+  }
+}

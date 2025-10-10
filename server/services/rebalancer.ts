@@ -1,16 +1,19 @@
-import { Keypair, PublicKey } from '@solana/web3.js';
-import { dlmmClient } from '../solana/dlmm-client';
-import { storage } from '../storage';
-import { volatilityTracker } from './volatility-tracker';
-import { feeOptimizer } from '../utils/fee-optimizer';
-import { telegramBot } from './telegram-bot';
-import type { RebalanceEvent, RebalanceParams } from '../../shared/schema';
+import { Keypair, PublicKey } from "@solana/web3.js";
+import { dlmmClient } from "../solana/dlmm-client";
+import storage from "../storage";
+import { volatilityTracker } from "./volatility-tracker";
+import { feeOptimizer } from "../utils/fee-optimizer";
+import { telegramBot } from "./telegram-bot";
+import type { RebalanceEvent, RebalanceParams } from "../../shared/schema";
 
 export class Rebalancer {
   private rebalancingInterval: NodeJS.Timeout | null = null;
   private readonly CHECK_INTERVAL = 300000; // 5 minutes
 
-  async shouldRebalance(positionAddress: string, threshold: number = 5): Promise<boolean> {
+  async shouldRebalance(
+    positionAddress: string,
+    threshold: number = 5
+  ): Promise<boolean> {
     const positionData = storage.getPosition(positionAddress);
     if (!positionData) return false;
 
@@ -25,7 +28,7 @@ export class Rebalancer {
     const distanceToLower = Math.abs(pool.activeId - position.lowerBinId);
     const distanceToUpper = Math.abs(pool.activeId - position.upperBinId);
     const positionWidth = position.upperBinId - position.lowerBinId;
-    
+
     const minDistance = Math.min(distanceToLower, distanceToUpper);
     const distancePercentage = (minDistance / positionWidth) * 100;
 
@@ -41,26 +44,63 @@ export class Rebalancer {
     currentBinId: number,
     volatility: number
   ): { lowerBinId: number; upperBinId: number } {
-    // Adjust range width based on volatility
-    // Higher volatility = wider range to reduce rebalancing frequency
-    const baseWidth = 100; // Base bin width
-    const volatilityMultiplier = 1 + (volatility / 100);
-    const width = Math.floor(baseWidth * volatilityMultiplier);
+    const finalBinCount = 16; // Fixed per position
+    const half = Math.floor((finalBinCount - 1) / 2); // 7
+    const lowerBinId = currentBinId - half; // e.g., -7
+    const upperBinId = currentBinId + (finalBinCount - 1 - half); // e.g., +8
 
-    // Ensure minimum width
-    const finalWidth = Math.max(width, 50);
+    const calculatedBinCount = upperBinId - lowerBinId + 1;
+    if (calculatedBinCount !== finalBinCount)
+      throw new Error(`Bin count mismatch: ${calculatedBinCount}`);
 
-    return {
-      lowerBinId: currentBinId - Math.floor(finalWidth / 2),
-      upperBinId: currentBinId + Math.floor(finalWidth / 2),
-    };
+    const relativeLeft = lowerBinId - currentBinId;
+    const relativeRight = upperBinId - currentBinId;
+    if (relativeLeft >= 0 || relativeRight <= 0)
+      throw new Error(
+        `Invalid relatives: left=${relativeLeft}, right=${relativeRight}`
+      );
+
+    console.log("Calculated optimal range (16 bins)", {
+      currentBinId,
+      lowerBinId,
+      upperBinId,
+      relativeLeft,
+      relativeRight,
+    });
+
+    return { lowerBinId, upperBinId };
   }
 
-  async executeRebalance(params: RebalanceParams, owner: Keypair): Promise<RebalanceEvent> {
+  async executeRebalance(
+    params: RebalanceParams,
+    owner: Keypair
+  ): Promise<RebalanceEvent> {
     const positionData = storage.getPosition(params.positionAddress);
     if (!positionData) {
-      throw new Error('Position not found');
+      throw new Error("Position not found");
     }
+
+    console.log("\n=== REBALANCE EXECUTION START ===");
+    console.log("Position:", params.positionAddress);
+    console.log("Pool active bin ID:", positionData.pool.activeId);
+    console.log("Old range:", {
+      lower: positionData.position.lowerBinId,
+      upper: positionData.position.upperBinId,
+    });
+    console.log("New range:", {
+      lower: params.newLowerBinId,
+      upper: params.newUpperBinId,
+    });
+    console.log("New range relative to active:", {
+      relativeLower: params.newLowerBinId - positionData.pool.activeId,
+      relativeUpper: params.newUpperBinId - positionData.pool.activeId,
+    });
+    console.log(
+      "Bin array index (from lower):",
+      Math.floor(params.newLowerBinId / 70)
+    );
+    console.log("Range width:", params.newUpperBinId - params.newLowerBinId);
+    console.log("=== REBALANCE EXECUTION START ===\n");
 
     const event: RebalanceEvent = {
       id: `rebalance_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -75,41 +115,32 @@ export class Rebalancer {
         upperBinId: params.newUpperBinId,
       },
       reason: params.reason,
-      signature: '',
-      status: 'pending',
+      signature: "",
+      status: "pending",
     };
 
     try {
-      // Remove liquidity from old position
-      const removeTx = await dlmmClient.removeLiquidity(
+      // Use rebalancePosition which properly handles the transaction preparation
+      const result = await dlmmClient.rebalancePosition(
         positionData.position,
-        10000, // 100%
-        owner
-      );
-
-      // Create new position with new range
-      const createTx = await dlmmClient.createPosition(
-        new PublicKey(positionData.pool.address),
         params.newLowerBinId,
         params.newUpperBinId,
-        positionData.position.liquidityX,
-        positionData.position.liquidityY,
-        owner
+        owner.publicKey
       );
 
-      event.signature = createTx;
-      event.status = 'success';
-      
+      event.signature = result.positionMint;
+      event.status = "success";
+
       storage.addRebalanceEvent(event);
-      
+
       // Send Telegram notification
       await telegramBot.sendRebalanceAlert(event);
-      
+
       // Add alert
       storage.addAlert({
         id: `alert_${Date.now()}`,
-        type: 'success',
-        title: 'Position Rebalanced',
+        type: "success",
+        title: "Position Rebalanced",
         message: `Position ${params.positionAddress.slice(0, 8)}... successfully rebalanced`,
         positionAddress: params.positionAddress,
         timestamp: Date.now(),
@@ -118,17 +149,25 @@ export class Rebalancer {
 
       return event;
     } catch (error) {
-      event.status = 'failed';
+      console.error("\n=== REBALANCE EXECUTION FAILED ===");
+      console.error("Position:", params.positionAddress);
+      console.error(
+        "Error:",
+        error instanceof Error ? error.message : String(error)
+      );
+      console.error("=== REBALANCE EXECUTION FAILED ===\n");
+
+      event.status = "failed";
       storage.addRebalanceEvent(event);
-      
+
       // Send Telegram notification for failure
       await telegramBot.sendRebalanceAlert(event);
-      
+
       storage.addAlert({
         id: `alert_${Date.now()}`,
-        type: 'error',
-        title: 'Rebalance Failed',
-        message: `Failed to rebalance position: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        type: "error",
+        title: "Rebalance Failed",
+        message: `Failed to rebalance position: ${error instanceof Error ? error.message : "Unknown error"}`,
         positionAddress: params.positionAddress,
         timestamp: Date.now(),
         read: false,
@@ -142,10 +181,15 @@ export class Rebalancer {
     const positions = storage.getUserPositions(owner.publicKey.toString());
 
     for (const positionData of positions) {
-      const shouldRebal = await this.shouldRebalance(positionData.position.address, threshold);
-      
+      const shouldRebal = await this.shouldRebalance(
+        positionData.position.address,
+        threshold
+      );
+
       if (shouldRebal) {
-        const volatilityData = volatilityTracker.getVolatilityData(positionData.pool.address);
+        const volatilityData = volatilityTracker.getVolatilityData(
+          positionData.pool.address
+        );
         const volatility = volatilityData?.volatility || 50;
 
         const newRange = this.calculateOptimalRange(
@@ -159,14 +203,17 @@ export class Rebalancer {
           newLowerBinId: newRange.lowerBinId,
           newUpperBinId: newRange.upperBinId,
           reason: positionData.riskMetrics.isInRange
-            ? 'Price approaching range boundary'
-            : 'Position out of range',
+            ? "Price approaching range boundary"
+            : "Position out of range",
         };
 
         try {
           await this.executeRebalance(params, owner);
         } catch (error) {
-          console.error(`Failed to rebalance position ${positionData.position.address}:`, error);
+          console.error(
+            `Failed to rebalance position ${positionData.position.address}:`,
+            error
+          );
         }
       }
     }
@@ -181,14 +228,14 @@ export class Rebalancer {
       await this.checkAndRebalancePositions(owner, threshold);
     }, this.CHECK_INTERVAL);
 
-    console.log('Auto-rebalancing started');
+    console.log("Auto-rebalancing started");
   }
 
   stopAutoRebalancing() {
     if (this.rebalancingInterval) {
       clearInterval(this.rebalancingInterval);
       this.rebalancingInterval = null;
-      console.log('Auto-rebalancing stopped');
+      console.log("Auto-rebalancing stopped");
     }
   }
 }

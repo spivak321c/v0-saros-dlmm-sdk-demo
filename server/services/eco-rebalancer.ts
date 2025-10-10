@@ -1,8 +1,8 @@
-import { PublicKey, Keypair } from '@solana/web3.js';
-import { dlmmClient } from '../solana/dlmm-client';
-import { storage } from '../storage';
-import { volatilityTracker } from './volatility-tracker';
-import type { RebalanceEvent, RebalanceParams } from '../../shared/schema';
+import { PublicKey, Keypair } from "@solana/web3.js";
+import { dlmmClient } from "../solana/dlmm-client";
+import storage from "../storage";
+import { volatilityTracker } from "./volatility-tracker";
+import type { RebalanceEvent, RebalanceParams } from "../../shared/schema";
 
 interface BatchedRebalance {
   positionAddress: string;
@@ -37,7 +37,8 @@ export class EcoRebalancer {
     priority += distanceScore;
 
     // Impermanent loss severity
-    const ilScore = Math.min(positionData.performance.impermanentLoss / 10, 1) * 20;
+    const ilScore =
+      Math.min(positionData.performance.impermanentLoss / 10, 1) * 20;
     priority += ilScore;
 
     return Math.min(priority, 100);
@@ -50,7 +51,9 @@ export class EcoRebalancer {
     const priority = this.calculatePriority(positionAddress);
 
     if (priority < this.MIN_PRIORITY_THRESHOLD) {
-      console.log(`Position ${positionAddress} priority too low (${priority}), skipping`);
+      console.log(
+        `Position ${positionAddress} priority too low (${priority}), skipping`
+      );
       return false;
     }
 
@@ -71,7 +74,9 @@ export class EcoRebalancer {
     // Sort by priority (highest first)
     this.batchQueue.sort((a, b) => b.priority - a.priority);
 
-    console.log(`Queued rebalance for ${positionAddress} with priority ${priority}`);
+    console.log(
+      `Queued rebalance for ${positionAddress} with priority ${priority}`
+    );
     return true;
   }
 
@@ -80,7 +85,7 @@ export class EcoRebalancer {
    */
   async executeBatch(owner: Keypair): Promise<RebalanceEvent[]> {
     if (this.batchQueue.length === 0) {
-      console.log('No rebalances in queue');
+      console.log("No rebalances in queue");
       return [];
     }
 
@@ -102,8 +107,8 @@ export class EcoRebalancer {
     // Add batch completion alert
     storage.addAlert({
       id: `alert_${Date.now()}`,
-      type: 'info',
-      title: 'Batch Rebalance Completed',
+      type: "info",
+      title: "Batch Rebalance Completed",
       message: `Processed ${events.length} positions in eco-mode`,
       timestamp: Date.now(),
       read: false,
@@ -121,7 +126,7 @@ export class EcoRebalancer {
   ): Promise<RebalanceEvent> {
     const positionData = storage.getPosition(params.positionAddress);
     if (!positionData) {
-      throw new Error('Position not found');
+      throw new Error("Position not found");
     }
 
     const event: RebalanceEvent = {
@@ -137,35 +142,26 @@ export class EcoRebalancer {
         upperBinId: params.newUpperBinId,
       },
       reason: `${params.reason} (eco-mode)`,
-      signature: '',
-      status: 'pending',
+      signature: "",
+      status: "pending",
     };
 
     try {
-      // Remove liquidity
-      const removeTx = await dlmmClient.removeLiquidity(
+      // Use rebalancePosition which properly handles the transaction preparation
+      const result = await dlmmClient.rebalancePosition(
         positionData.position,
-        10000,
-        owner
-      );
-
-      // Create new position
-      const createTx = await dlmmClient.createPosition(
-        new PublicKey(positionData.pool.address),
         params.newLowerBinId,
         params.newUpperBinId,
-        positionData.position.liquidityX,
-        positionData.position.liquidityY,
-        owner
+        owner.publicKey
       );
 
-      event.signature = createTx;
-      event.status = 'success';
+      event.signature = result.positionMint;
+      event.status = "success";
       storage.addRebalanceEvent(event);
 
       return event;
     } catch (error) {
-      event.status = 'failed';
+      event.status = "failed";
       storage.addRebalanceEvent(event);
       throw error;
     }
@@ -200,8 +196,8 @@ export class EcoRebalancer {
           newLowerBinId: newRange.lowerBinId,
           newUpperBinId: newRange.upperBinId,
           reason: positionData.riskMetrics.isInRange
-            ? 'Price approaching range boundary'
-            : 'Position out of range',
+            ? "Price approaching range boundary"
+            : "Position out of range",
         };
 
         this.queueRebalance(positionData.position.address, params);
@@ -263,7 +259,7 @@ export class EcoRebalancer {
       }
     }, this.BATCH_INTERVAL);
 
-    console.log('Eco-mode rebalancing started');
+    console.log("Eco-mode rebalancing started");
   }
 
   /**
@@ -273,7 +269,7 @@ export class EcoRebalancer {
     if (this.batchInterval) {
       clearInterval(this.batchInterval);
       this.batchInterval = null;
-      console.log('Eco-mode rebalancing stopped');
+      console.log("Eco-mode rebalancing stopped");
     }
   }
 
