@@ -1,17 +1,17 @@
-import WebSocket from "ws";
+import { WebSocketServer, WebSocket as WS } from "ws";
 import type { Server as HTTPServer } from "http";
 import storage from "../storage";
 import { logger } from "../utils/logger";
 import type { WSMessage } from "../../shared/schema";
 
 export class WSServer {
-  private wss: WebSocket.Server | null = null;
+  private wss: WebSocketServer | null = null;
   private clients: Set<any> = new Set();
   private updateInterval: NodeJS.Timeout | null = null;
 
   start(server: HTTPServer) {
     logger.info("Starting WebSocket server on HTTP server");
-    this.wss = new WebSocket.Server({ server, path: "/ws" });
+    this.wss = new WebSocketServer({ server, path: "/ws" });
 
     this.wss.on("connection", (ws: any) => {
       logger.info("[WebSocket] Client connected", {
