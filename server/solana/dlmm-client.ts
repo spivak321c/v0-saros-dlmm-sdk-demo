@@ -1,4 +1,5 @@
-import { Connection, PublicKey, Keypair, Transaction } from "@solana/web3.js";
+import { Connection, PublicKey, Keypair } from "@solana/web3.js";
+import { Transaction } from "@saros-finance/dlmm-sdk/node_modules/@solana/web3.js";
 import { getConnection } from "./connection";
 import type { PoolInfo, Position } from "../../shared/schema";
 import { LiquidityBookServices, MODE } from "@saros-finance/dlmm-sdk";
@@ -86,9 +87,11 @@ export class DLMMClient {
       logger.debug("Fetching pool info", {
         poolAddress: poolAddress.toString(),
       });
-      // Fetch pool metadata using the SDK
+
+      // Add delay before fetching to avoid rate limits
       await this.delay(200);
 
+      // Fetch pool metadata using the SDK
       const metadata = await this.sarosDLMM.fetchPoolMetadata(
         poolAddress.toString()
       );
@@ -249,7 +252,7 @@ export class DLMMClient {
           }
 
           // Add delay between requests to avoid rate limits (429 errors)
-          await this.delay(700);
+          await this.delay(800);
         } catch (err) {
           // Skip pools where user has no positions or errors occur
           const errorMsg = err instanceof Error ? err.message : String(err);

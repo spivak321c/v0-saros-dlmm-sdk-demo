@@ -1,7 +1,7 @@
-import { PublicKey, Keypair } from '@solana/web3.js';
-import { storage } from '../storage';
-import { dlmmClient } from '../solana/dlmm-client';
-import { telegramBot } from './telegram-bot';
+import { PublicKey, Keypair } from "@solana/web3.js";
+import storage from "../storage";
+import { dlmmClient } from "../solana/dlmm-client";
+import { telegramBot } from "./telegram-bot";
 
 interface StopLossConfig {
   positionAddress: string;
@@ -27,7 +27,10 @@ export class StopLossManager {
     return this.configs.get(positionAddress);
   }
 
-  async checkStopLoss(positionAddress: string, owner: Keypair): Promise<boolean> {
+  async checkStopLoss(
+    positionAddress: string,
+    owner: Keypair
+  ): Promise<boolean> {
     const config = this.configs.get(positionAddress);
     if (!config || !config.enabled) {
       return false;
@@ -42,26 +45,38 @@ export class StopLossManager {
 
     // Check total return threshold
     if (performance.totalReturn <= -config.lossThreshold) {
-      await this.executeStopLoss(positionAddress, owner, 'Total loss threshold exceeded');
+      await this.executeStopLoss(
+        positionAddress,
+        owner,
+        "Total loss threshold exceeded"
+      );
       return true;
     }
 
     // Check impermanent loss threshold
     if (performance.impermanentLoss >= config.impermanentLossThreshold) {
-      await this.executeStopLoss(positionAddress, owner, 'Impermanent loss threshold exceeded');
+      await this.executeStopLoss(
+        positionAddress,
+        owner,
+        "Impermanent loss threshold exceeded"
+      );
       return true;
     }
 
     return false;
   }
 
-  private async executeStopLoss(positionAddress: string, owner: Keypair, reason: string) {
+  private async executeStopLoss(
+    positionAddress: string,
+    owner: Keypair,
+    reason: string
+  ) {
     try {
       console.log(`Executing stop-loss for ${positionAddress}: ${reason}`);
 
       const positionData = storage.getPosition(positionAddress);
       if (!positionData) {
-        throw new Error('Position not found');
+        throw new Error("Position not found");
       }
 
       // Remove all liquidity
@@ -74,41 +89,47 @@ export class StopLossManager {
       // Add alert
       const alert = {
         id: `alert_${Date.now()}`,
-        type: 'warning' as const,
-        title: 'Stop-Loss Triggered',
+        type: "warning" as const,
+        title: "Stop-Loss Triggered",
         message: `Position ${positionAddress.slice(0, 8)}... closed due to: ${reason}`,
         positionAddress,
         timestamp: Date.now(),
         read: false,
       };
       storage.addAlert(alert);
-      
+
       // Send Telegram notification
+      await telegramBot.sendAlert(alert);
       await telegramBot.sendPositionAlert(
         positionAddress,
-        'stop_loss',
+        "stop_loss",
         `Reason: ${reason}\nTransaction: ${result}`
       );
 
       // Remove position from storage
       storage.deletePosition(positionAddress);
-      
+
       // Remove stop-loss config
       this.configs.delete(positionAddress);
 
       console.log(`Stop-loss executed successfully: ${result}`);
     } catch (error) {
-      console.error(`Failed to execute stop-loss for ${positionAddress}:`, error);
-      
-      storage.addAlert({
+      console.error(
+        `Failed to execute stop-loss for ${positionAddress}:`,
+        error
+      );
+
+      const errorAlert = {
         id: `alert_${Date.now()}`,
-        type: 'error',
-        title: 'Stop-Loss Failed',
-        message: `Failed to execute stop-loss: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        type: "error" as const,
+        title: "Stop-Loss Failed",
+        message: `Failed to execute stop-loss: ${error instanceof Error ? error.message : "Unknown error"}`,
         positionAddress,
         timestamp: Date.now(),
         read: false,
-      });
+      };
+      storage.addAlert(errorAlert);
+      await telegramBot.sendAlert(errorAlert);
     }
   }
 
@@ -123,14 +144,14 @@ export class StopLossManager {
       }
     }, this.CHECK_INTERVAL);
 
-    console.log('Stop-loss monitoring started');
+    console.log("Stop-loss monitoring started");
   }
 
   stopMonitoring() {
     if (this.checkInterval) {
       clearInterval(this.checkInterval);
       this.checkInterval = null;
-      console.log('Stop-loss monitoring stopped');
+      console.log("Stop-loss monitoring stopped");
     }
   }
 }

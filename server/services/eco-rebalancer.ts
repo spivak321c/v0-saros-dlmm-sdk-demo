@@ -2,6 +2,7 @@ import { PublicKey, Keypair } from "@solana/web3.js";
 import { dlmmClient } from "../solana/dlmm-client";
 import storage from "../storage";
 import { volatilityTracker } from "./volatility-tracker";
+import { telegramBot } from "./telegram-bot";
 import type { RebalanceEvent, RebalanceParams } from "../../shared/schema";
 
 interface BatchedRebalance {
@@ -105,14 +106,16 @@ export class EcoRebalancer {
     }
 
     // Add batch completion alert
-    storage.addAlert({
+    const batchAlert = {
       id: `alert_${Date.now()}`,
-      type: "info",
+      type: "info" as const,
       title: "Batch Rebalance Completed",
       message: `Processed ${events.length} positions in eco-mode`,
       timestamp: Date.now(),
       read: false,
-    });
+    };
+    storage.addAlert(batchAlert);
+    await telegramBot.sendAlert(batchAlert);
 
     return events;
   }
