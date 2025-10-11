@@ -12,7 +12,12 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
+    "baseUrl": "./",
+    "paths": {
+      "zod": ["./node_modules/zod"],
+      "shared/*": ["../shared/*"]
+    },
     "types": ["node"]
   },
   "include": [
