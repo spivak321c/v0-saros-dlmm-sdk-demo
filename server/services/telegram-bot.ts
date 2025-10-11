@@ -539,12 +539,13 @@ export class TelegramBot {
   }
 
   private formatAlertMessage(alert: Alert): string {
-    const emoji = {
+    const emojiObj: Record<"info" | "warning" | "error" | "success", string> = {
       info: "ℹ️",
       warning: "⚠️",
       error: "❌",
       success: "✅",
-    }[alert.type];
+    };
+    const emoji = emojiObj[alert.type as keyof typeof emojiObj];
 
     return `${emoji} *${alert.title}*\n\n${alert.message}`;
   }
