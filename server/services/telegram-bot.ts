@@ -1,5 +1,6 @@
 import { Telegraf } from "telegraf";
 import { Agent } from "https";
+import BN from "bn.js";
 import type { RebalanceEvent, Alert } from "../../shared/schema";
 import storage from "../storage";
 import { config } from "../config";
@@ -7,6 +8,7 @@ import { positionMonitor } from "./position-monitor";
 import { volatilityTracker } from "./volatility-tracker";
 import { dlmmClient } from "../solana/dlmm-client";
 import { logger } from "../utils/logger";
+import { simulatorService } from "./simulator.service";
 
 interface TelegramConfig {
   botToken?: string;
@@ -99,82 +101,37 @@ export class TelegramBot {
     });
 
     this.bot.command("positions", async (ctx) => {
-      try {
-        const args = ctx.message.text.split(" ");
-        const walletAddress = args[1];
+      const args = ctx.message.text.split(" ");
+      const walletAddress = args[1];
 
-        if (!walletAddress) {
-          ctx.reply("Usage: /positions <wallet_address>");
-          return;
-        }
-
-        ctx.reply("🔍 Fetching positions...");
-        const positions =
-          await positionMonitor.loadUserPositions(walletAddress);
-
-        if (positions.length === 0) {
-          ctx.reply("No active positions found.");
-          return;
-        }
-
-        let message = `📊 *Your Active Positions (${positions.length})*\n\n`;
-
-        for (const pos of positions) {
-          const poolPair = `${pos.pool.tokenX.symbol}/${pos.pool.tokenY.symbol}`;
-          message += `*${poolPair}*\n`;
-          message += `   💰 Value: $${pos.currentValue.toFixed(2)}\n`;
-          message += `   📈 Fees: $${pos.feesEarned.total.toFixed(2)}\n`;
-          message += `   📊 Range: [${pos.position.lowerBinId}, ${pos.position.upperBinId}]\n`;
-          message += `   ${pos.riskMetrics.isInRange ? "✅ In Range" : "⚠️ Out of Range"}\n\n`;
-        }
-
-        ctx.reply(message, { parse_mode: "Markdown" });
-      } catch (error) {
-        logger.error("Error fetching positions via Telegram", { error });
-        ctx.reply(
-          `❌ Error fetching positions: ${error instanceof Error ? error.message : String(error)}`
-        );
+      if (!walletAddress) {
+        ctx.reply("Usage: /positions <wallet_address>");
+        return;
       }
+
+      ctx.reply("🔍 Fetching positions...");
+
+      // Execute async without blocking bot
+      this.fetchPositionsAsync(ctx.chat.id, walletAddress).catch((error) => {
+        logger.error("Error in async positions fetch", { error });
+      });
     });
 
     this.bot.command("rebalance", async (ctx) => {
-      try {
-        const args = ctx.message.text.split(" ");
-        const walletAddress = args[1];
+      const args = ctx.message.text.split(" ");
+      const walletAddress = args[1];
 
-        if (!walletAddress) {
-          ctx.reply("Usage: /rebalance <wallet_address>");
-          return;
-        }
-
-        ctx.reply("🔍 Checking positions for rebalancing opportunities...");
-        const positions =
-          await positionMonitor.loadUserPositions(walletAddress);
-        const toRebalance = positions.filter(
-          (p) => !p.riskMetrics.isInRange || p.performance.impermanentLoss < -10
-        );
-
-        if (toRebalance.length === 0) {
-          ctx.reply("✅ All positions are optimal. No rebalancing needed.");
-          return;
-        }
-
-        let message = `⚠️ *Found ${toRebalance.length} position(s) to rebalance:*\n\n`;
-
-        for (const pos of toRebalance) {
-          const poolPair = `${pos.pool.tokenX.symbol}/${pos.pool.tokenY.symbol}`;
-          message += `*${poolPair}*\n`;
-          message += `   ${!pos.riskMetrics.isInRange ? "⚠️ Out of range" : "📉 High IL"}\n`;
-          message += `   Current: [${pos.position.lowerBinId}, ${pos.position.upperBinId}]\n\n`;
-        }
-
-        ctx.reply(message, { parse_mode: "Markdown" });
-      } catch (error) {
-        logger.error("Error checking rebalance via Telegram", { error });
-        ctx.reply(
-          `❌ Error during rebalancing check: ${error instanceof Error ? error.message : String(error)}`
-        );
+      if (!walletAddress) {
+        ctx.reply("Usage: /rebalance <wallet_address>");
+        return;
       }
+
+      ctx.reply("🔍 Checking positions for rebalancing opportunities...");
+
+      // Execute async without blocking bot
+      this.checkRebalanceAsync(ctx.chat.id, walletAddress).catch((error) => {
+        logger.error("Error in async rebalance check", { error });
+      });
     });
 
     this.bot.command("volatility", async (ctx) => {
@@ -211,24 +168,155 @@ export class TelegramBot {
       }
     });
 
-    this.bot.command("simulate", (ctx) => {
-      ctx.reply(
-        "📊 *Strategy Simulator Results (30 days)*\n\n" +
-          "*Passive LP:*\n" +
-          "  Total Fees: $842.50\n" +
-          "  IL: -$125.30\n" +
-          "  Net: $717.20\n" +
-          "  APY: 28.4%\n\n" +
-          "*Auto Rebalanced:*\n" +
-          "  Total Fees: $1,248.90\n" +
-          "  IL: -$45.80\n" +
-          "  Net: $1,203.10\n" +
-          "  APY: 47.6%\n" +
-          "  Rebalances: 8\n\n" +
-          "✅ Auto rebalancing improved returns by 67.7%!",
-        { parse_mode: "Markdown" }
-      );
+    this.bot.command("simulate", async (ctx) => {
+      ctx.reply("🔄 Running strategy simulation...");
+
+      // Execute async without blocking bot
+      this.runSimulationAsync(ctx.chat.id).catch((error) => {
+        logger.error("Error in async simulation", { error });
+      });
     });
+  }
+
+  private async fetchPositionsAsync(chatId: number, walletAddress: string) {
+    try {
+      // Fetch positions from both blockchain and storage
+      const blockchainPositions = await Promise.race([
+        positionMonitor.loadUserPositions(walletAddress),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Request timeout")), 60000)
+        ),
+      ]);
+
+      // Also get positions from storage
+      const storedPositions = storage.getUserPositions(walletAddress);
+
+      // Merge positions, avoiding duplicates
+      const positionMap = new Map();
+      blockchainPositions.forEach((p) =>
+        positionMap.set(p.position.address, p)
+      );
+      storedPositions.forEach((p) => {
+        if (!positionMap.has(p.position.address)) {
+          positionMap.set(p.position.address, p);
+        }
+      });
+
+      const positions = Array.from(positionMap.values());
+
+      if (positions.length === 0) {
+        await this.bot?.telegram.sendMessage(
+          chatId,
+          "No active positions found."
+        );
+        return;
+      }
+
+      let message = `📊 *Your Active Positions (${positions.length})*\n\n`;
+
+      for (const pos of positions) {
+        const poolPair = `${pos.pool.tokenX.symbol}/${pos.pool.tokenY.symbol}`;
+        message += `*${poolPair}*\n`;
+        message += `   💰 Value: $${pos.currentValue.toFixed(2)}\n`;
+        message += `   📈 Fees: $${pos.feesEarned.total.toFixed(2)}\n`;
+        message += `   📊 Range: [${pos.position.lowerBinId}, ${pos.position.upperBinId}]\n`;
+        message += `   ${pos.riskMetrics.isInRange ? "✅ In Range" : "⚠️ Out of Range"}\n\n`;
+      }
+
+      await this.bot?.telegram.sendMessage(chatId, message, {
+        parse_mode: "Markdown",
+      });
+    } catch (error) {
+      logger.error("Error fetching positions via Telegram", { error });
+      await this.bot?.telegram.sendMessage(
+        chatId,
+        `❌ Error fetching positions: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  private async checkRebalanceAsync(chatId: number, walletAddress: string) {
+    try {
+      const positions = await Promise.race([
+        positionMonitor.loadUserPositions(walletAddress),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Request timeout")), 60000)
+        ),
+      ]);
+
+      const toRebalance = positions.filter(
+        (p) => !p.riskMetrics.isInRange || p.performance.impermanentLoss < -10
+      );
+
+      if (toRebalance.length === 0) {
+        await this.bot?.telegram.sendMessage(
+          chatId,
+          "✅ All positions are optimal. No rebalancing needed."
+        );
+        return;
+      }
+
+      let message = `⚠️ *Found ${toRebalance.length} position(s) to rebalance:*\n\n`;
+
+      for (const pos of toRebalance) {
+        const poolPair = `${pos.pool.tokenX.symbol}/${pos.pool.tokenY.symbol}`;
+        message += `*${poolPair}*\n`;
+        message += `   ${!pos.riskMetrics.isInRange ? "⚠️ Out of range" : "📉 High IL"}\n`;
+        message += `   Current: [${pos.position.lowerBinId}, ${pos.position.upperBinId}]\n\n`;
+      }
+
+      await this.bot?.telegram.sendMessage(chatId, message, {
+        parse_mode: "Markdown",
+      });
+    } catch (error) {
+      logger.error("Error checking rebalance via Telegram", { error });
+      await this.bot?.telegram.sendMessage(
+        chatId,
+        `❌ Error during rebalancing check: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  private async runSimulationAsync(chatId: number) {
+    try {
+      const result = await simulatorService.runSimulation({
+        initialLiquidity: new BN(10000),
+        priceRange: { lower: 0.95, upper: 1.05 },
+        duration: 30,
+        rebalanceFrequency: 24,
+        volatilityTarget: 0.15,
+        feeRate: 30,
+      });
+
+      if (!result.success || !result.data) {
+        throw new Error("Simulation failed");
+      }
+
+      const sim = result.data;
+      const totalReturn = sim.totalReturn * 100;
+      const feesEarned = sim.feesEarned;
+      const maxDD = sim.maxDrawdown * 100;
+      const sharpe = sim.sharpeRatio;
+
+      const message =
+        "📊 *Strategy Simulator Results (30 days)*\n\n" +
+        `💰 Total Return: ${totalReturn >= 0 ? "+" : ""}${totalReturn.toFixed(2)}%\n` +
+        `📈 Fees Earned: $${feesEarned.toFixed(2)}\n` +
+        `📉 Max Drawdown: ${maxDD.toFixed(2)}%\n` +
+        `📊 Sharpe Ratio: ${sharpe.toFixed(2)}\n` +
+        `🔄 Rebalances: ${sim.rebalanceCount}\n\n` +
+        `✅ Simulation completed successfully!`;
+
+      await this.bot?.telegram.sendMessage(chatId, message, {
+        parse_mode: "Markdown",
+      });
+    } catch (error) {
+      logger.error("Error running simulation via Telegram", { error });
+      await this.bot?.telegram.sendMessage(
+        chatId,
+        `❌ Error running simulation: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
   }
 
   private async startMonitoring(chatId: number, walletAddress: string) {

@@ -3,11 +3,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { DollarSign, TrendingUp, AlertTriangle, ArrowUpRight, ArrowDownRight, RefreshCw } from 'lucide-react';
+import { DollarSign, TrendingUp, AlertTriangle, ArrowUpRight, ArrowDownRight, RefreshCw, Eye } from 'lucide-react';
 import { useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { Transaction } from '@solana/web3.js';
 import { useToast } from '@/hooks/use-toast';
+import { PositionDetailModal } from './position-detail-modal';
 import type { PositionData } from '../../shared/schema';
 
 interface PositionCardProps {
@@ -24,6 +25,7 @@ export function PositionCard({ position, onCollectFees, onRebalance, wallet }: P
   const isInRange = riskMetrics?.isInRange ?? false;
   const totalReturn = performance?.totalReturn || 0;
   const [showRebalanceModal, setShowRebalanceModal] = useState(false);
+  const [showDetailModal, setShowDetailModal] = useState(false);
   const [rebalanceData, setRebalanceData] = useState<any>(null);
   const [isRebalancing, setIsRebalancing] = useState(false);
   const { signTransaction, publicKey } = useWallet();
@@ -85,38 +87,11 @@ export function PositionCard({ position, onCollectFees, onRebalance, wallet }: P
 
       setIsRebalancing(true);
 
-      // Check if this is a multi-transaction rebalance
-      let parsedTx;
-      try {
-        parsedTx = JSON.parse(rebalanceData.transaction);
-      } catch {
-        parsedTx = null;
-      }
-
-      let signedTransactionData;
-
-      if (parsedTx && parsedTx.type === 'multi' && Array.isArray(parsedTx.transactions)) {
-        // Handle multiple transactions
-        const signedTxs: string[] = [];
-        
-        for (const txBase64 of parsedTx.transactions) {
-          const txBuffer = Uint8Array.from(atob(txBase64), c => c.charCodeAt(0));
-          const transaction = Transaction.from(txBuffer);
-          const signedTx = await signTransaction(transaction);
-          signedTxs.push(btoa(String.fromCharCode(...signedTx.serialize())));
-        }
-        
-        signedTransactionData = JSON.stringify({
-          transactions: signedTxs,
-          type: 'multi'
-        });
-      } else {
-        // Handle single transaction (legacy)
-        const txBuffer = Uint8Array.from(atob(rebalanceData.transaction), c => c.charCodeAt(0));
-        const transaction = Transaction.from(txBuffer);
-        const signedTx = await signTransaction(transaction);
-        signedTransactionData = btoa(String.fromCharCode(...signedTx.serialize()));
-      }
+      // Deserialize and sign the transaction
+      const txBuffer = Uint8Array.from(atob(rebalanceData.transaction), c => c.charCodeAt(0));
+      const transaction = Transaction.from(txBuffer);
+      const signedTx = await signTransaction(transaction);
+      const signedTransactionData = btoa(String.fromCharCode(...signedTx.serialize()));
 
       // Send the transaction(s)
       const response = await fetch(`${API_URL}/rebalance/execute`, {
@@ -154,7 +129,8 @@ export function PositionCard({ position, onCollectFees, onRebalance, wallet }: P
   };
 
   return (
-    <Card className="hover:shadow-md transition-shadow">
+    <>
+    <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => setShowDetailModal(true)}>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="space-y-1">
@@ -226,7 +202,22 @@ export function PositionCard({ position, onCollectFees, onRebalance, wallet }: P
         {/* Actions */}
         <div className="flex gap-2 pt-2">
           <Button
-            onClick={handleRebalance}
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowDetailModal(true);
+            }}
+            variant="outline"
+            className="flex-1 gap-2"
+            size="sm"
+          >
+            <Eye className="h-4 w-4" />
+            Details
+          </Button>
+          <Button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleRebalance();
+            }}
             variant={isInRange ? "outline" : "default"}
             className="flex-1 gap-2"
             size="sm"
@@ -235,17 +226,6 @@ export function PositionCard({ position, onCollectFees, onRebalance, wallet }: P
             <RefreshCw className={`h-4 w-4 ${isRebalancing ? 'animate-spin' : ''}`} />
             {isRebalancing ? 'Checking...' : 'Rebalance'}
           </Button>
-          {onCollectFees && (
-            <Button
-              onClick={onCollectFees}
-              variant="outline"
-              className="flex-1 gap-2"
-              size="sm"
-            >
-              <DollarSign className="h-4 w-4" />
-              Collect Fees
-            </Button>
-          )}
         </div>
 
         {/* Additional Info */}
@@ -336,6 +316,14 @@ export function PositionCard({ position, onCollectFees, onRebalance, wallet }: P
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Position Detail Modal */}
+      <PositionDetailModal 
+        position={position}
+        open={showDetailModal}
+        onOpenChange={setShowDetailModal}
+      />
     </Card>
+    </>
   );
 }

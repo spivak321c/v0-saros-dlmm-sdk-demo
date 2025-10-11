@@ -12,7 +12,7 @@ export class Rebalancer {
 
   async shouldRebalance(
     positionAddress: string,
-    threshold: number = 5
+    threshold: number = 10
   ): Promise<boolean> {
     const positionData = storage.getPosition(positionAddress);
     if (!positionData) return false;
@@ -21,10 +21,15 @@ export class Rebalancer {
 
     // Check if position is out of range
     if (!riskMetrics.isInRange) {
+      console.log("[Rebalancer] Position out of range", {
+        positionAddress,
+        activeId: pool.activeId,
+        range: [position.lowerBinId, position.upperBinId],
+      });
       return true;
     }
 
-    // Check if price is close to range boundaries
+    // Check if price is close to range boundaries (within threshold %)
     const distanceToLower = Math.abs(pool.activeId - position.lowerBinId);
     const distanceToUpper = Math.abs(pool.activeId - position.upperBinId);
     const positionWidth = position.upperBinId - position.lowerBinId;
@@ -32,7 +37,29 @@ export class Rebalancer {
     const minDistance = Math.min(distanceToLower, distanceToUpper);
     const distancePercentage = (minDistance / positionWidth) * 100;
 
+    console.log("[Rebalancer] Position range check", {
+      positionAddress,
+      activeId: pool.activeId,
+      range: [position.lowerBinId, position.upperBinId],
+      distanceToLower,
+      distanceToUpper,
+      positionWidth,
+      minDistance,
+      distancePercentage,
+      threshold,
+      needsRebalance: distancePercentage < threshold,
+    });
+
+    // Only rebalance if price is within threshold % of range edge
     if (distancePercentage < threshold) {
+      console.log(
+        "[Rebalancer] Position needs rebalancing - too close to edge",
+        {
+          positionAddress,
+          distancePercentage,
+          threshold,
+        }
+      );
       return true;
     }
 

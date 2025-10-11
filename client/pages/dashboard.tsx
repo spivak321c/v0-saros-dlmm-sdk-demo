@@ -1,19 +1,14 @@
-import { useEffect, useState } from "react";
-import { useWallet } from "@solana/wallet-adapter-react";
-import {
-  Activity,
-  TrendingUp,
-  Wallet,
-  Zap,
-  ArrowUpRight,
-  ArrowDownRight,
-} from "lucide-react";
-import { useWalletPositions } from "../hooks/use-wallet-positions";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useNavigate } from "react-router-dom";
-import { useWebSocket } from "@/lib/websocket";
-import { useToast } from "@/hooks/use-toast";
+import { useEffect, useState } from 'react';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { Activity, TrendingUp, Wallet, Zap, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { useWalletPositions } from '../hooks/use-wallet-positions';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useNavigate } from 'react-router-dom';
+import { useWebSocket } from '@/lib/websocket';
+import { useToast } from '@/hooks/use-toast';
+import { PositionDetailModal } from '@/components/position-detail-modal';
+import type { PositionData } from '../../shared/schema';
 
 export default function Dashboard() {
   const { publicKey } = useWallet();
@@ -32,23 +27,15 @@ export default function Dashboard() {
     threshold: number;
     lastCheck?: number;
   } | null>(null);
+  const [selectedPosition, setSelectedPosition] = useState<PositionData | null>(null);
+  const [showPositionDetail, setShowPositionDetail] = useState(false);
 
   useEffect(() => {
     if (positions && positions.length > 0) {
-      const totalValue = positions.reduce(
-        (sum, p) => sum + (p.currentValue || 0),
-        0
-      );
-      const totalFees = positions.reduce(
-        (sum, p) => sum + (p.feesEarned?.total || 0),
-        0
-      );
-      const avgYield =
-        positions.reduce(
-          (sum, p) => sum + (p.performance?.dailyYield || 0),
-          0
-        ) / positions.length;
-
+      const totalValue = positions.reduce((sum, p) => sum + (p.currentValue || 0), 0);
+      const totalFees = positions.reduce((sum, p) => sum + (p.feesEarned?.total || 0), 0);
+      const avgYield = positions.reduce((sum, p) => sum + (p.performance?.dailyYield || 0), 0) / positions.length;
+      
       setStats({
         totalValue,
         totalFees,
@@ -62,23 +49,20 @@ export default function Dashboard() {
   useEffect(() => {
     if (!lastMessage) return;
 
-    if (lastMessage.type === "auto_rebalance_status") {
+    if (lastMessage.type === 'auto_rebalance_status') {
       setAutoRebalanceStatus(lastMessage.data);
-    } else if (lastMessage.type === "alert") {
+    } else if (lastMessage.type === 'alert') {
       const alert = lastMessage.data;
       toast({
         title: alert.title,
         description: alert.message,
-        variant: alert.type === "error" ? "destructive" : "default",
+        variant: alert.type === 'error' ? 'destructive' : 'default',
       });
-    } else if (lastMessage.type === "rebalance_event") {
+    } else if (lastMessage.type === 'rebalance_event') {
       const event = lastMessage.data;
       toast({
-        title: "Rebalance Completed",
-        description: `Position ${event.positionAddress.slice(
-          0,
-          8
-        )}... has been rebalanced`,
+        title: 'Rebalance Completed',
+        description: `Position ${event.positionAddress.slice(0, 8)}... has been rebalanced`,
       });
     }
   }, [lastMessage, toast]);
@@ -91,8 +75,7 @@ export default function Dashboard() {
             <Wallet className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
             <h2 className="text-xl font-semibold mb-2">Connect Your Wallet</h2>
             <p className="text-muted-foreground">
-              Connect your Solana wallet to view your DLMM positions and
-              portfolio analytics
+              Connect your Solana wallet to view your DLMM positions and portfolio analytics
             </p>
           </CardContent>
         </Card>
@@ -115,9 +98,7 @@ export default function Dashboard() {
     <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6 lg:p-8 max-w-7xl mx-auto">
       {/* Header */}
       <div className="space-y-1 sm:space-y-2">
-        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight">
-          Portfolio Overview
-        </h1>
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight">Portfolio Overview</h1>
         <p className="text-sm sm:text-base text-muted-foreground">
           Monitor and manage your Saros DLMM liquidity positions
         </p>
@@ -133,12 +114,9 @@ export default function Dashboard() {
             <Wallet className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-xl sm:text-2xl font-bold">
-              ${stats.totalValue.toFixed(2)}
-            </div>
+            <div className="text-xl sm:text-2xl font-bold">${stats.totalValue.toFixed(2)}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              Across {stats.activePositions} position
-              {stats.activePositions !== 1 ? "s" : ""}
+              Across {stats.activePositions} position{stats.activePositions !== 1 ? 's' : ''}
             </p>
           </CardContent>
         </Card>
@@ -151,9 +129,7 @@ export default function Dashboard() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-xl sm:text-2xl font-bold">
-              ${stats.totalFees.toFixed(2)}
-            </div>
+            <div className="text-xl sm:text-2xl font-bold">${stats.totalFees.toFixed(2)}</div>
             <p className="text-xs text-success mt-1 flex items-center gap-1">
               <ArrowUpRight className="h-3 w-3" />
               From trading fees
@@ -169,12 +145,9 @@ export default function Dashboard() {
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-xl sm:text-2xl font-bold">
-              {stats.activePositions}
-            </div>
+            <div className="text-xl sm:text-2xl font-bold">{stats.activePositions}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              {positions?.filter((p) => p.riskMetrics?.isInRange).length || 0}{" "}
-              in range
+              {positions?.filter(p => p.riskMetrics?.isInRange).length || 0} in range
             </p>
           </CardContent>
         </Card>
@@ -187,9 +160,7 @@ export default function Dashboard() {
             <Zap className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-xl sm:text-2xl font-bold">
-              {stats.avgAPY.toFixed(2)}%
-            </div>
+            <div className="text-xl sm:text-2xl font-bold">{stats.avgAPY.toFixed(2)}%</div>
             <p className="text-xs text-muted-foreground mt-1">
               Annualized yield
             </p>
@@ -201,15 +172,8 @@ export default function Dashboard() {
       <Card>
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <CardTitle className="text-lg sm:text-xl">
-              Recent Positions
-            </CardTitle>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate("/positions")}
-              className="self-start sm:self-auto"
-            >
+            <CardTitle className="text-lg sm:text-xl">Recent Positions</CardTitle>
+            <Button variant="ghost" size="sm" onClick={() => navigate('/positions')} className="self-start sm:self-auto">
               View All
             </Button>
           </div>
@@ -221,21 +185,23 @@ export default function Dashboard() {
                 <div
                   key={idx}
                   className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors cursor-pointer"
-                  onClick={() => navigate("/positions")}
+                  onClick={() => {
+                    setSelectedPosition(position);
+                    setShowPositionDetail(true);
+                  }}
                 >
                   <div className="flex items-center gap-3">
                     <div className="flex items-center gap-1">
                       <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium">
-                        {position.pool?.tokenX?.symbol?.charAt(0) || "?"}
+                        {position.pool?.tokenX?.symbol?.charAt(0) || '?'}
                       </div>
                       <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium -ml-2">
-                        {position.pool?.tokenY?.symbol?.charAt(0) || "?"}
+                        {position.pool?.tokenY?.symbol?.charAt(0) || '?'}
                       </div>
                     </div>
                     <div>
                       <p className="text-sm sm:text-base font-medium">
-                        {position.pool?.tokenX?.symbol || "Unknown"}/
-                        {position.pool?.tokenY?.symbol || "Unknown"}
+                        {position.pool?.tokenX?.symbol || 'Unknown'}/{position.pool?.tokenY?.symbol || 'Unknown'}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {position.riskMetrics?.isInRange ? (
@@ -247,25 +213,16 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div className="text-left sm:text-right">
-                    <p className="text-sm sm:text-base font-medium">
-                      ${(position.currentValue || 0).toFixed(2)}
-                    </p>
-                    <p
-                      className={`text-xs flex items-center gap-1 sm:justify-end ${
-                        (position.performance?.totalReturn || 0) >= 0
-                          ? "text-success"
-                          : "text-destructive"
-                      }`}
-                    >
+                    <p className="text-sm sm:text-base font-medium">${(position.currentValue || 0).toFixed(2)}</p>
+                    <p className={`text-xs flex items-center gap-1 sm:justify-end ${
+                      (position.performance?.totalReturn || 0) >= 0 ? 'text-success' : 'text-destructive'
+                    }`}>
                       {(position.performance?.totalReturn || 0) >= 0 ? (
                         <ArrowUpRight className="h-3 w-3" />
                       ) : (
                         <ArrowDownRight className="h-3 w-3" />
                       )}
-                      {Math.abs(position.performance?.totalReturn || 0).toFixed(
-                        2
-                      )}
-                      %
+                      {Math.abs(position.performance?.totalReturn || 0).toFixed(2)}%
                     </p>
                   </div>
                 </div>
@@ -275,7 +232,7 @@ export default function Dashboard() {
             <div className="text-center py-12">
               <Activity className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
               <p className="text-muted-foreground mb-4">No positions yet</p>
-              <Button onClick={() => navigate("/positions")}>
+              <Button onClick={() => navigate('/positions')}>
                 Create Your First Position
               </Button>
             </div>
@@ -286,36 +243,37 @@ export default function Dashboard() {
       {/* Quick Actions */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
         <Button
-          onClick={() => navigate("/positions")}
+          onClick={() => navigate('/positions')}
           className="h-auto py-5 sm:py-6 flex-col gap-2"
           variant="outline"
         >
           <Activity className="h-4 w-4 sm:h-5 sm:w-5" />
-          <span className="text-sm sm:text-base font-medium">
-            Manage Positions
-          </span>
+          <span className="text-sm sm:text-base font-medium">Manage Positions</span>
         </Button>
         <Button
-          onClick={() => navigate("/simulator")}
+          onClick={() => navigate('/simulator')}
           className="h-auto py-5 sm:py-6 flex-col gap-2"
           variant="outline"
         >
           <Zap className="h-4 w-4 sm:h-5 sm:w-5" />
-          <span className="text-sm sm:text-base font-medium">
-            Strategy Simulator
-          </span>
+          <span className="text-sm sm:text-base font-medium">Strategy Simulator</span>
         </Button>
         <Button
-          onClick={() => navigate("/analytics")}
+          onClick={() => navigate('/analytics')}
           className="h-auto py-5 sm:py-6 flex-col gap-2 sm:col-span-2 lg:col-span-1"
           variant="outline"
         >
           <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" />
-          <span className="text-sm sm:text-base font-medium">
-            View Analytics
-          </span>
+          <span className="text-sm sm:text-base font-medium">View Analytics</span>
         </Button>
       </div>
+
+      {/* Position Detail Modal */}
+      <PositionDetailModal
+        position={selectedPosition}
+        open={showPositionDetail}
+        onOpenChange={setShowPositionDetail}
+      />
     </div>
   );
 }

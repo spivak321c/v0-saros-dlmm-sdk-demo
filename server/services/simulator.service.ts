@@ -3,17 +3,17 @@
  * Simulates DLMM strategies with historical or synthetic data
  */
 
-import BN from 'bn.js';
-import { config } from '../config';
-import { logger } from '../utils/logger';
+import BN from "bn.js";
+import { config } from "../config";
+import { logger } from "../utils/logger";
 import {
   SimulationParams,
   SimulationResult,
   SimulationSnapshot,
   PricePoint,
   ApiResponse,
-} from '../types';
-import { ValidationError } from '../utils/errors';
+} from "../types";
+import { ValidationError } from "../utils/errors";
 
 export class SimulatorService {
   /**
@@ -23,7 +23,7 @@ export class SimulatorService {
     params: SimulationParams
   ): Promise<ApiResponse<SimulationResult>> {
     try {
-      logger.info('Starting strategy simulation', {
+      logger.info("Starting strategy simulation", {
         duration: params.duration,
         rebalanceFrequency: params.rebalanceFrequency,
       });
@@ -40,7 +40,7 @@ export class SimulatorService {
       // Run simulation
       const result = await this.simulate(params, pricePath);
 
-      logger.info('Simulation completed', {
+      logger.info("Simulation completed", {
         totalReturn: result.totalReturn.toFixed(4),
         rebalanceCount: result.rebalanceCount,
       });
@@ -51,7 +51,7 @@ export class SimulatorService {
         timestamp: Date.now(),
       };
     } catch (error: any) {
-      logger.error('Simulation failed', {
+      logger.error("Simulation failed", {
         error: error.message,
       });
 
@@ -132,7 +132,7 @@ export class SimulatorService {
         rebalanceCount++;
         hoursSinceLastRebalance = 0;
 
-        logger.debug('Rebalancing in simulation', {
+        logger.debug("Rebalancing in simulation", {
           hour: i,
           price: point.price,
           newRange: currentRange,
@@ -150,8 +150,7 @@ export class SimulatorService {
       });
     }
 
-    const finalValue =
-      timeline[timeline.length - 1]?.value || initialValue;
+    const finalValue = timeline[timeline.length - 1]?.value || initialValue;
     const totalReturn = (finalValue - initialValue) / initialValue;
 
     // Calculate Sharpe Ratio
@@ -297,33 +296,31 @@ export class SimulatorService {
    */
   private validateSimulationParams(params: SimulationParams): void {
     if (params.duration <= 0) {
-      throw new ValidationError('Duration must be positive');
+      throw new ValidationError("Duration must be positive");
     }
 
     if (params.rebalanceFrequency <= 0) {
-      throw new ValidationError('Rebalance frequency must be positive');
+      throw new ValidationError("Rebalance frequency must be positive");
     }
 
     if (params.rebalanceFrequency > params.duration) {
-      throw new ValidationError(
-        'Rebalance frequency cannot exceed duration'
-      );
+      throw new ValidationError("Rebalance frequency cannot exceed duration");
     }
 
     if (params.volatilityTarget < 0 || params.volatilityTarget > 2) {
-      throw new ValidationError(
-        'Volatility target must be between 0 and 2'
-      );
+      throw new ValidationError("Volatility target must be between 0 and 2");
     }
 
     if (params.feeRate < 0 || params.feeRate > 10000) {
-      throw new ValidationError('Fee rate must be between 0 and 10000 bps');
+      throw new ValidationError("Fee rate must be between 0 and 10000 bps");
     }
 
     if (params.priceRange.lower >= params.priceRange.upper) {
       throw new ValidationError(
-        'Price range lower bound must be less than upper bound'
+        "Price range lower bound must be less than upper bound"
       );
     }
   }
 }
+
+export const simulatorService = new SimulatorService();

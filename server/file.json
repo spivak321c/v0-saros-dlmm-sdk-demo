@@ -331,8 +331,8 @@
         "feeY": "0",
         "rewardOne": "0",
         "rewardTwo": "0",
-        "lastUpdatedAt": 1760103030272,
-        "createdAt": 1760103030272
+        "lastUpdatedAt": 1760140313116,
+        "createdAt": 1760140313116
       },
       "pool": {
         "address": "6CrcbhdYbzQTFU8bFfY8kZHVD2K3P2G4mS8jZGq318zi",
@@ -490,8 +490,8 @@
         "feeY": "0",
         "rewardOne": "0",
         "rewardTwo": "0",
-        "lastUpdatedAt": 1760098071239,
-        "createdAt": 1760098071239
+        "lastUpdatedAt": 1760140311682,
+        "createdAt": 1760140311682
       },
       "pool": {
         "address": "99BJs5JEhST4kSVop15AxBux4ZCEVVhziN9ZEysjpcNi",
@@ -596,8 +596,8 @@
         "feeY": "0",
         "rewardOne": "0",
         "rewardTwo": "0",
-        "lastUpdatedAt": 1760103490004,
-        "createdAt": 1760103490004
+        "lastUpdatedAt": 1760141908810,
+        "createdAt": 1760141908810
       },
       "pool": {
         "address": "CvPk7zKeqwAgv5pVKLis98QKR1rhyq1JEC595fi4Pe7p",
@@ -635,6 +635,59 @@
         "utilizationRate": 0.5,
         "isInRange": true
       }
+    },
+    "4rB5qefR7QvZAimcWeB2e9QaAgD1WzV1auPdRUQAGv1V": {
+      "position": {
+        "address": "4rB5qefR7QvZAimcWeB2e9QaAgD1WzV1auPdRUQAGv1V",
+        "poolAddress": "8eZc4FvCqGX2aFQ7k4qAucYtLedwetUApnadTy3Bq1AR",
+        "owner": "",
+        "lowerBinId": 8388835,
+        "upperBinId": 8388836,
+        "liquidityX": "0",
+        "liquidityY": "0",
+        "feeX": "0",
+        "feeY": "0",
+        "rewardOne": "0",
+        "rewardTwo": "0",
+        "lastUpdatedAt": 1760141910322,
+        "createdAt": 1760141910322
+      },
+      "pool": {
+        "address": "8eZc4FvCqGX2aFQ7k4qAucYtLedwetUApnadTy3Bq1AR",
+        "tokenX": {
+          "mint": "mnt72NV74VfWGbSJqYswLbgPds22hVvspjqBzi7dc4j",
+          "symbol": "mnt7...dc4j",
+          "decimals": 0
+        },
+        "tokenY": {
+          "mint": "mntpxwsakkExmJb82nkJDGsVZyNapvoe1q7awjK37F4",
+          "symbol": "mntp...37F4",
+          "decimals": 0
+        },
+        "binStep": 250,
+        "activeId": 8388836,
+        "currentPrice": 278.63861921597965,
+        "tvl": 0,
+        "volume24h": 0,
+        "fees24h": 0
+      },
+      "currentValue": 0,
+      "feesEarned": {
+        "tokenX": 0,
+        "tokenY": 0,
+        "total": 0
+      },
+      "performance": {
+        "totalReturn": 0,
+        "dailyYield": 0,
+        "impermanentLoss": 0
+      },
+      "riskMetrics": {
+        "concentration": 1,
+        "priceDistance": 0,
+        "utilizationRate": 0.5,
+        "isInRange": true
+      }
     }
   },
   "rebalanceEvents": [
@@ -653,9 +706,330 @@
       "reason": "Manual rebalance",
       "signature": "2qTZrdMMNd8UU8oeDory2yqt7StF8qpL7vb7vHHvoLfAENP44iCAKA8CzzJEYyRT7pp6SYLrjxBBjLRxbm5h2juj",
       "status": "success"
+    },
+    {
+      "id": "44T7RBk9rSngyUaDCmMjcoHqXVQnfSt5Df7nssmXeGhLYvoYh9D6PJ2azjVeo53LqhFQBghs4Ctvy44nLdwVpon3",
+      "positionAddress": "GRsNp1GUbSbLF7afriykY1zDp8tNwsAELyMR4nvoAUo2",
+      "timestamp": 1760130187301,
+      "oldRange": {
+        "lowerBinId": 8388653,
+        "upperBinId": 8388654
+      },
+      "newRange": {
+        "lowerBinId": 0,
+        "upperBinId": 0
+      },
+      "reason": "Manual rebalance",
+      "signature": "44T7RBk9rSngyUaDCmMjcoHqXVQnfSt5Df7nssmXeGhLYvoYh9D6PJ2azjVeo53LqhFQBghs4Ctvy44nLdwVpon3",
+      "status": "success"
+    },
+    {
+      "id": "3ibavL7FGG1Jn4CberoC3tCiRFYDUyZdgQuLY4LCVS4ggE9vPasdhzXXuDvy8zP5k4TEn9cYJHaFjVHkMs19a6UG",
+      "positionAddress": "4uENW6C9DipatAREVdQBRoir68aAdYqbbBvgktkFf2wE",
+      "timestamp": 1760140300331,
+      "oldRange": {
+        "lowerBinId": 8388653,
+        "upperBinId": 8388654
+      },
+      "newRange": {
+        "lowerBinId": 0,
+        "upperBinId": 0
+      },
+      "reason": "Manual rebalance",
+      "signature": "3ibavL7FGG1Jn4CberoC3tCiRFYDUyZdgQuLY4LCVS4ggE9vPasdhzXXuDvy8zP5k4TEn9cYJHaFjVHkMs19a6UG",
+      "status": "success"
     }
   ],
-  "alerts": [],
+  "alerts": [
+    {
+      "id": "rebalance_alert_1760133734961_4uENW6C9DipatAREVdQBRoir68aAdYqbbBvgktkFf2wE",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position 4uENW6C9... is approaching range boundary",
+      "positionAddress": "4uENW6C9DipatAREVdQBRoir68aAdYqbbBvgktkFf2wE",
+      "timestamp": 1760133734961,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760133735461_C8gQo7HKxUT8CKTkyBfHqgXkv1PbZ88WTEDSUaEfa3K6",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position C8gQo7HK... is approaching range boundary",
+      "positionAddress": "C8gQo7HKxUT8CKTkyBfHqgXkv1PbZ88WTEDSUaEfa3K6",
+      "timestamp": 1760133735461,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760133735962_AP3qFnmmmfoVcNkUowAsGQUgv9fEhrcSBZscvzfr7A9k",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position AP3qFnmm... is approaching range boundary",
+      "positionAddress": "AP3qFnmmmfoVcNkUowAsGQUgv9fEhrcSBZscvzfr7A9k",
+      "timestamp": 1760133735962,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760133736463_GRsNp1GUbSbLF7afriykY1zDp8tNwsAELyMR4nvoAUo2",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position GRsNp1GU... is approaching range boundary",
+      "positionAddress": "GRsNp1GUbSbLF7afriykY1zDp8tNwsAELyMR4nvoAUo2",
+      "timestamp": 1760133736463,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760133736963_3gWqcVdzTyafrGHYA48wLvv6j6bn6EE3jjEdHWiyLbYp",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position 3gWqcVdz... is approaching range boundary",
+      "positionAddress": "3gWqcVdzTyafrGHYA48wLvv6j6bn6EE3jjEdHWiyLbYp",
+      "timestamp": 1760133736963,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760133737463_HsNPX2QLb1EVmwVZeUehAra6FFT8Q5Kk2jS1GU5AG2fN",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position HsNPX2QL... is approaching range boundary",
+      "positionAddress": "HsNPX2QLb1EVmwVZeUehAra6FFT8Q5Kk2jS1GU5AG2fN",
+      "timestamp": 1760133737463,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760133737964_9uzicNJ7NJ7vY6HPap3sfK64hvfGt1SYbNfvZUTwJr8b",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position 9uzicNJ7... is approaching range boundary",
+      "positionAddress": "9uzicNJ7NJ7vY6HPap3sfK64hvfGt1SYbNfvZUTwJr8b",
+      "timestamp": 1760133737964,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760133738964_EzwXX41HQBjApXz4VreCgUtbMRRwehPUFVvhsDa7o89d",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position EzwXX41H... is approaching range boundary",
+      "positionAddress": "EzwXX41HQBjApXz4VreCgUtbMRRwehPUFVvhsDa7o89d",
+      "timestamp": 1760133738964,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760134034980_4uENW6C9DipatAREVdQBRoir68aAdYqbbBvgktkFf2wE",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position 4uENW6C9... is approaching range boundary",
+      "positionAddress": "4uENW6C9DipatAREVdQBRoir68aAdYqbbBvgktkFf2wE",
+      "timestamp": 1760134034980,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760134035480_C8gQo7HKxUT8CKTkyBfHqgXkv1PbZ88WTEDSUaEfa3K6",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position C8gQo7HK... is approaching range boundary",
+      "positionAddress": "C8gQo7HKxUT8CKTkyBfHqgXkv1PbZ88WTEDSUaEfa3K6",
+      "timestamp": 1760134035480,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760134035985_AP3qFnmmmfoVcNkUowAsGQUgv9fEhrcSBZscvzfr7A9k",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position AP3qFnmm... is approaching range boundary",
+      "positionAddress": "AP3qFnmmmfoVcNkUowAsGQUgv9fEhrcSBZscvzfr7A9k",
+      "timestamp": 1760134035985,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760134036488_GRsNp1GUbSbLF7afriykY1zDp8tNwsAELyMR4nvoAUo2",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position GRsNp1GU... is approaching range boundary",
+      "positionAddress": "GRsNp1GUbSbLF7afriykY1zDp8tNwsAELyMR4nvoAUo2",
+      "timestamp": 1760134036488,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760134036989_3gWqcVdzTyafrGHYA48wLvv6j6bn6EE3jjEdHWiyLbYp",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position 3gWqcVdz... is approaching range boundary",
+      "positionAddress": "3gWqcVdzTyafrGHYA48wLvv6j6bn6EE3jjEdHWiyLbYp",
+      "timestamp": 1760134036989,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760134037490_HsNPX2QLb1EVmwVZeUehAra6FFT8Q5Kk2jS1GU5AG2fN",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position HsNPX2QL... is approaching range boundary",
+      "positionAddress": "HsNPX2QLb1EVmwVZeUehAra6FFT8Q5Kk2jS1GU5AG2fN",
+      "timestamp": 1760134037490,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760134037991_9uzicNJ7NJ7vY6HPap3sfK64hvfGt1SYbNfvZUTwJr8b",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position 9uzicNJ7... is approaching range boundary",
+      "positionAddress": "9uzicNJ7NJ7vY6HPap3sfK64hvfGt1SYbNfvZUTwJr8b",
+      "timestamp": 1760134037991,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760134038991_EzwXX41HQBjApXz4VreCgUtbMRRwehPUFVvhsDa7o89d",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position EzwXX41H... is approaching range boundary",
+      "positionAddress": "EzwXX41HQBjApXz4VreCgUtbMRRwehPUFVvhsDa7o89d",
+      "timestamp": 1760134038991,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760135707027_4uENW6C9DipatAREVdQBRoir68aAdYqbbBvgktkFf2wE",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position 4uENW6C9... is approaching range boundary",
+      "positionAddress": "4uENW6C9DipatAREVdQBRoir68aAdYqbbBvgktkFf2wE",
+      "timestamp": 1760135707027,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760135707528_C8gQo7HKxUT8CKTkyBfHqgXkv1PbZ88WTEDSUaEfa3K6",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position C8gQo7HK... is approaching range boundary",
+      "positionAddress": "C8gQo7HKxUT8CKTkyBfHqgXkv1PbZ88WTEDSUaEfa3K6",
+      "timestamp": 1760135707528,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760135708030_AP3qFnmmmfoVcNkUowAsGQUgv9fEhrcSBZscvzfr7A9k",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position AP3qFnmm... is approaching range boundary",
+      "positionAddress": "AP3qFnmmmfoVcNkUowAsGQUgv9fEhrcSBZscvzfr7A9k",
+      "timestamp": 1760135708030,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760135708530_GRsNp1GUbSbLF7afriykY1zDp8tNwsAELyMR4nvoAUo2",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position GRsNp1GU... is approaching range boundary",
+      "positionAddress": "GRsNp1GUbSbLF7afriykY1zDp8tNwsAELyMR4nvoAUo2",
+      "timestamp": 1760135708530,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760135709030_3gWqcVdzTyafrGHYA48wLvv6j6bn6EE3jjEdHWiyLbYp",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position 3gWqcVdz... is approaching range boundary",
+      "positionAddress": "3gWqcVdzTyafrGHYA48wLvv6j6bn6EE3jjEdHWiyLbYp",
+      "timestamp": 1760135709030,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760135709531_HsNPX2QLb1EVmwVZeUehAra6FFT8Q5Kk2jS1GU5AG2fN",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position HsNPX2QL... is approaching range boundary",
+      "positionAddress": "HsNPX2QLb1EVmwVZeUehAra6FFT8Q5Kk2jS1GU5AG2fN",
+      "timestamp": 1760135709531,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760135710032_9uzicNJ7NJ7vY6HPap3sfK64hvfGt1SYbNfvZUTwJr8b",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position 9uzicNJ7... is approaching range boundary",
+      "positionAddress": "9uzicNJ7NJ7vY6HPap3sfK64hvfGt1SYbNfvZUTwJr8b",
+      "timestamp": 1760135710032,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760135711034_EzwXX41HQBjApXz4VreCgUtbMRRwehPUFVvhsDa7o89d",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position EzwXX41H... is approaching range boundary",
+      "positionAddress": "EzwXX41HQBjApXz4VreCgUtbMRRwehPUFVvhsDa7o89d",
+      "timestamp": 1760135711034,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760136367986_4uENW6C9DipatAREVdQBRoir68aAdYqbbBvgktkFf2wE",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position 4uENW6C9... is approaching range boundary",
+      "positionAddress": "4uENW6C9DipatAREVdQBRoir68aAdYqbbBvgktkFf2wE",
+      "timestamp": 1760136367986,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760136368487_C8gQo7HKxUT8CKTkyBfHqgXkv1PbZ88WTEDSUaEfa3K6",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position C8gQo7HK... is approaching range boundary",
+      "positionAddress": "C8gQo7HKxUT8CKTkyBfHqgXkv1PbZ88WTEDSUaEfa3K6",
+      "timestamp": 1760136368487,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760136368989_AP3qFnmmmfoVcNkUowAsGQUgv9fEhrcSBZscvzfr7A9k",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position AP3qFnmm... is approaching range boundary",
+      "positionAddress": "AP3qFnmmmfoVcNkUowAsGQUgv9fEhrcSBZscvzfr7A9k",
+      "timestamp": 1760136368989,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760136369490_GRsNp1GUbSbLF7afriykY1zDp8tNwsAELyMR4nvoAUo2",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position GRsNp1GU... is approaching range boundary",
+      "positionAddress": "GRsNp1GUbSbLF7afriykY1zDp8tNwsAELyMR4nvoAUo2",
+      "timestamp": 1760136369490,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760136369990_3gWqcVdzTyafrGHYA48wLvv6j6bn6EE3jjEdHWiyLbYp",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position 3gWqcVdz... is approaching range boundary",
+      "positionAddress": "3gWqcVdzTyafrGHYA48wLvv6j6bn6EE3jjEdHWiyLbYp",
+      "timestamp": 1760136369990,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760136370492_HsNPX2QLb1EVmwVZeUehAra6FFT8Q5Kk2jS1GU5AG2fN",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position HsNPX2QL... is approaching range boundary",
+      "positionAddress": "HsNPX2QLb1EVmwVZeUehAra6FFT8Q5Kk2jS1GU5AG2fN",
+      "timestamp": 1760136370492,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760136370992_9uzicNJ7NJ7vY6HPap3sfK64hvfGt1SYbNfvZUTwJr8b",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position 9uzicNJ7... is approaching range boundary",
+      "positionAddress": "9uzicNJ7NJ7vY6HPap3sfK64hvfGt1SYbNfvZUTwJr8b",
+      "timestamp": 1760136370992,
+      "read": false
+    },
+    {
+      "id": "rebalance_alert_1760136371993_EzwXX41HQBjApXz4VreCgUtbMRRwehPUFVvhsDa7o89d",
+      "type": "warning",
+      "title": "Rebalance Recommended",
+      "message": "Position EzwXX41H... is approaching range boundary",
+      "positionAddress": "EzwXX41HQBjApXz4VreCgUtbMRRwehPUFVvhsDa7o89d",
+      "timestamp": 1760136371993,
+      "read": false
+    }
+  ],
   "stopLossConfigs": {},
   "settings": {
     "telegram": {
@@ -666,12 +1040,12 @@
     "rebalancing": {
       "enabled": false,
       "intervalMinutes": 15,
-      "volatilityThreshold": 0.05
+      "volatilityThreshold": 0.04
     },
     "monitoring": {
       "enabled": false,
       "pools": []
     },
-    "monitoredWallet": null
+    "monitoredWallet": "4LuwejxiFouDRAaEP4V8UkRFkyQm1xBspCPhzuVPH7XJ"
   }
 }

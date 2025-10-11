@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { PublicKey, Keypair, Transaction } from "@solana/web3.js";
+import BN from "bn.js";
 import { positionMonitor } from "./services/position-monitor";
 import { volatilityTracker } from "./services/volatility-tracker";
 import { rebalancer } from "./services/rebalancer";
@@ -10,11 +11,13 @@ import { wsServer } from "./services/websocket-server";
 import { dlmmClient } from "./solana/dlmm-client";
 import { ilCalculator } from "./utils/il-calculator";
 import { feeOptimizer } from "./utils/fee-optimizer";
+import { SimulatorService } from "./services/simulator.service";
 import storage from "./storage";
 import { logger } from "./utils/logger";
 import type { ApiResponse } from "../shared/schema";
 
 const router = Router();
+const simulatorService = new SimulatorService();
 
 // Positions
 router.get("/positions/:wallet", async (req, res) => {
@@ -31,9 +34,17 @@ router.get("/positions/:wallet", async (req, res) => {
 
     // Also include positions from storage (for positions without owner field)
     const allStoredPositions = storage.getAllPositions();
+    logger.info("All stored positions count", {
+      total: allStoredPositions.length,
+    });
+
     const storedPositionsWithoutOwner = allStoredPositions.filter(
       (p) => !p.position.owner || p.position.owner === ""
     );
+    logger.info("Stored positions without owner", {
+      count: storedPositionsWithoutOwner.length,
+      addresses: storedPositionsWithoutOwner.map((p) => p.position.address),
+    });
 
     // Merge both lists, avoiding duplicates
     const positionMap = new Map();
@@ -48,6 +59,8 @@ router.get("/positions/:wallet", async (req, res) => {
     logger.info("Total positions including storage", {
       wallet,
       count: allPositions.length,
+      blockchainCount: positions.length,
+      storedWithoutOwnerCount: storedPositionsWithoutOwner.length,
     });
 
     const response: ApiResponse<typeof allPositions> = {
@@ -700,16 +713,24 @@ router.post("/analytics/fee-optimization", async (req, res) => {
 router.get("/pools", async (req, res) => {
   try {
     logger.info("GET /pools");
-    const poolAddresses = await dlmmClient.getPoolAddresses();
-    logger.info("Retrieved pool addresses", { count: poolAddresses.length });
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const offset = (page - 1) * limit;
 
-    // Fetch detailed info for first 20 pools (try more to get at least 10 valid ones)
+    const poolAddresses = await dlmmClient.getPoolAddresses();
+    logger.info("Retrieved pool addresses", {
+      count: poolAddresses.length,
+      page,
+      limit,
+    });
+
+    // Fetch detailed info for requested page
     const pools = [];
     let attempted = 0;
-    const maxAttempts = 30;
+    const maxAttempts = Math.min(offset + limit + 20, poolAddresses.length); // Try extra to account for failures
 
-    for (const address of poolAddresses) {
-      if (pools.length >= 10 || attempted >= maxAttempts) break;
+    for (let i = 0; i < poolAddresses.length && attempted < maxAttempts; i++) {
+      const address = poolAddresses[i];
       attempted++;
 
       try {
@@ -726,13 +747,34 @@ router.get("/pools", async (req, res) => {
           error: err instanceof Error ? err.message : String(err),
         });
       }
+
+      // Stop if we have enough pools for this page
+      if (pools.length >= offset + limit) break;
     }
 
-    logger.info("Pools fetched for response", { totalPools: pools.length });
+    // Slice to get the requested page
+    const paginatedPools = pools.slice(offset, offset + limit);
+    const totalPools = poolAddresses.length;
+    const totalPages = Math.ceil(totalPools / limit);
+
+    logger.info("Pools fetched for response", {
+      totalPools: paginatedPools.length,
+      page,
+      limit,
+      totalAvailable: totalPools,
+      totalPages,
+    });
 
     res.json({
       success: true,
-      data: pools,
+      data: paginatedPools,
+      pagination: {
+        page,
+        limit,
+        total: totalPools,
+        totalPages,
+        hasMore: page < totalPages,
+      },
       timestamp: Date.now(),
     });
   } catch (error) {
@@ -1268,4 +1310,74 @@ router.get("/automation/rebalance/status", (req, res) => {
   }
 });
 
+// Simulator
+router.post("/simulator/run", async (req, res) => {
+  try {
+    const {
+      amount,
+      lowerPrice,
+      upperPrice,
+      volatility,
+      duration,
+      rebalanceFrequency,
+      feeRate,
+    } = req.body;
+
+    logger.info("POST /simulator/run", {
+      amount,
+      lowerPrice,
+      upperPrice,
+      volatility,
+      duration,
+      rebalanceFrequency,
+    });
+
+    if (!amount || !lowerPrice || !upperPrice || volatility === undefined) {
+      return res.status(400).json({
+        success: false,
+        error:
+          "Missing required fields: amount, lowerPrice, upperPrice, volatility",
+        timestamp: Date.now(),
+      });
+    }
+
+    // Convert amount to BN (assuming 9 decimals for liquidity)
+    const initialLiquidity = new BN(amount * 1e9);
+
+    const simulationParams = {
+      initialLiquidity,
+      priceRange: {
+        lower: lowerPrice,
+        upper: upperPrice,
+      },
+      volatilityTarget: volatility / 100, // Convert percentage to decimal
+      duration: duration || 720, // Default 30 days in hours
+      rebalanceFrequency: rebalanceFrequency || 24, // Default daily rebalance
+      feeRate: feeRate || 25, // Default 0.25% fee (25 bps)
+    };
+
+    const result = await simulatorService.runSimulation(simulationParams);
+
+    logger.info("Simulation completed", {
+      totalReturn: result.data?.totalReturn,
+      feesEarned: result.data?.feesEarned,
+      rebalanceCount: result.data?.rebalanceCount,
+    });
+
+    res.json(result);
+  } catch (error) {
+    logger.error("Failed to run simulation", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    res.status(500).json({
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Failed to run simulation",
+      timestamp: Date.now(),
+    });
+  }
+});
+
 export default router;
+
+//export default router;

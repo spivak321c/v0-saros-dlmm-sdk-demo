@@ -87,6 +87,8 @@ export class DLMMClient {
         poolAddress: poolAddress.toString(),
       });
       // Fetch pool metadata using the SDK
+      await this.delay(200);
+
       const metadata = await this.sarosDLMM.fetchPoolMetadata(
         poolAddress.toString()
       );
@@ -247,7 +249,7 @@ export class DLMMClient {
           }
 
           // Add delay between requests to avoid rate limits (429 errors)
-          await this.delay(300);
+          await this.delay(700);
         } catch (err) {
           // Skip pools where user has no positions or errors occur
           const errorMsg = err instanceof Error ? err.message : String(err);

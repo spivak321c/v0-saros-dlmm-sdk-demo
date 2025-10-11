@@ -1,5 +1,12 @@
-import { Home, BarChart3, Settings, Activity, TrendingUp } from 'lucide-react';
-import { Link, useLocation } from 'react-router-dom';
+import {
+  Home,
+  BarChart3,
+  Settings,
+  Activity,
+  TrendingUp,
+  LineChart,
+} from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
 import {
   Sidebar,
   SidebarContent,
@@ -9,14 +16,15 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-} from '@/components/ui/sidebar';
+} from "@/components/ui/sidebar";
 
 const menuItems = [
-  { title: 'Dashboard', icon: Home, url: '/' },
-  { title: 'Positions', icon: Activity, url: '/positions' },
-  { title: 'Analytics', icon: BarChart3, url: '/analytics' },
-  { title: 'Simulator', icon: TrendingUp, url: '/simulator' },
-  { title: 'Settings', icon: Settings, url: '/settings' },
+  { title: "Dashboard", icon: Home, url: "/" },
+  { title: "Positions", icon: Activity, url: "/positions" },
+  { title: "Analytics", icon: BarChart3, url: "/analytics" },
+  { title: "Volatility", icon: LineChart, url: "/volatility" },
+  { title: "Simulator", icon: TrendingUp, url: "/simulator" },
+  { title: "Settings", icon: Settings, url: "/settings" },
 ];
 
 export function AppSidebar() {
@@ -31,7 +39,10 @@ export function AppSidebar() {
             <SidebarMenu>
               {menuItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={location.pathname === item.url}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={location.pathname === item.url}
+                  >
                     <Link to={item.url}>
                       <item.icon />
                       <span>{item.title}</span>

@@ -157,7 +157,7 @@ export class PositionMonitor {
         }
 
         // Add delay between position loads to avoid rate limiting
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       }
 
       logger.info("User positions loaded successfully", {
