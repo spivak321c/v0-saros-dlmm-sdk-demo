@@ -428,13 +428,13 @@ export class TelegramBot {
       rebalance: "🔄",
       "stop-loss": "🛑",
       "close-position": "❌",
-    }[type];
+    }[type as keyof typeof emoji];
 
     const title = {
       rebalance: "Rebalance Required",
       "stop-loss": "Stop-Loss Triggered",
       "close-position": "Position Close Recommended",
-    }[type];
+    }[type as keyof typeof title];
 
     let message = `${emoji} *${title}*\n\n`;
     message += `Position: \`${positionAddress.slice(0, 8)}...${positionAddress.slice(-8)}\`\n`;
@@ -475,7 +475,7 @@ export class TelegramBot {
       rebalance: "Rebalance",
       "stop-loss": "Stop-Loss",
       "close-position": "Position Close",
-    }[type];
+    }[type as keyof typeof title];
 
     let message = `${emoji} *${title} ${status}*\n\n`;
     message += `Position: \`${positionAddress.slice(0, 8)}...${positionAddress.slice(-8)}\`\n`;
@@ -507,13 +507,13 @@ export class TelegramBot {
       out_of_range: "⚠️",
       high_il: "📉",
       stop_loss: "🛑",
-    }[type];
+    }[type as keyof typeof emoji];
 
     const title = {
       out_of_range: "Position Out of Range",
       high_il: "High Impermanent Loss",
       stop_loss: "Stop-Loss Triggered",
-    }[type];
+    }[type as keyof typeof title];
 
     const message = `${emoji} *${title}*\n\nPosition: \`${positionAddress.slice(0, 8)}...${positionAddress.slice(-8)}\`\n\n${details}`;
 
@@ -544,7 +544,7 @@ export class TelegramBot {
       warning: "⚠️",
       error: "❌",
       success: "✅",
-    }[alert.type];
+    }[alert.type as keyof typeof emoji];
 
     return `${emoji} *${alert.title}*\n\n${alert.message}`;
   }
