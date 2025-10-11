@@ -12,6 +12,7 @@ import { dlmmClient } from "./solana/dlmm-client";
 import { ilCalculator } from "./utils/il-calculator";
 import { feeOptimizer } from "./utils/fee-optimizer";
 import { SimulatorService } from "./services/simulator.service";
+import { transactionQueueService } from "./services/transaction-queue.service";
 import storage from "./storage";
 import { logger } from "./utils/logger";
 import type { ApiResponse } from "../shared/schema";
@@ -1378,6 +1379,194 @@ router.post("/simulator/run", async (req, res) => {
   }
 });
 
-export default router;
+// Transaction Queue Endpoints
 
-//export default router;
+// Get pending transactions for a wallet
+router.get("/transactions/pending/:wallet", async (req, res) => {
+  try {
+    const { wallet } = req.params;
+    logger.info("GET /transactions/pending/:wallet", { wallet });
+
+    const transactions = transactionQueueService.getPendingTransactions(wallet);
+    logger.info("Retrieved pending transactions", {
+      wallet,
+      count: transactions.length,
+    });
+
+    const response: ApiResponse<typeof transactions> = {
+      success: true,
+      data: transactions,
+      timestamp: Date.now(),
+    };
+
+    res.json(response);
+  } catch (error) {
+    logger.error("Failed to get pending transactions", {
+      wallet: req.params.wallet,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    res.status(500).json({
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to get pending transactions",
+      timestamp: Date.now(),
+    });
+  }
+});
+
+// Approve and execute a transaction
+router.post("/transactions/approve/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { signedTransaction } = req.body;
+
+    logger.info("POST /transactions/approve/:id", { id });
+
+    if (!signedTransaction) {
+      return res.status(400).json({
+        success: false,
+        error: "Signed transaction is required",
+        timestamp: Date.now(),
+      });
+    }
+
+    // Get the transaction from queue
+    const transaction = transactionQueueService.getTransaction(id);
+    if (!transaction) {
+      return res.status(404).json({
+        success: false,
+        error: "Transaction not found",
+        timestamp: Date.now(),
+      });
+    }
+
+    // Mark as approved
+    const approveResult = await transactionQueueService.approveTransaction(id);
+    if (!approveResult.success) {
+      return res.status(400).json(approveResult);
+    }
+
+    // Execute the signed transaction
+    const executeResult = await transactionQueueService.executeTransaction(
+      id,
+      signedTransaction
+    );
+
+    if (executeResult.success) {
+      // Send success notification
+      await telegramBot.sendTransactionExecutedAlert(
+        transaction.type,
+        transaction.positionAddress,
+        executeResult.data?.signature || "",
+        true
+      );
+
+      logger.info("Transaction approved and executed", {
+        id,
+        signature: executeResult.data?.signature,
+      });
+    } else {
+      // Send failure notification
+      await telegramBot.sendTransactionExecutedAlert(
+        transaction.type,
+        transaction.positionAddress,
+        "",
+        false,
+        executeResult.error
+      );
+
+      logger.error("Transaction execution failed", {
+        id,
+        error: executeResult.error,
+      });
+    }
+
+    res.json(executeResult);
+  } catch (error) {
+    logger.error("Failed to approve transaction", {
+      id: req.params.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    res.status(500).json({
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to approve transaction",
+      timestamp: Date.now(),
+    });
+  }
+});
+
+// Reject a transaction
+router.post("/transactions/reject/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    logger.info("POST /transactions/reject/:id", { id });
+
+    const result = await transactionQueueService.rejectTransaction(id);
+
+    if (result.success) {
+      logger.info("Transaction rejected", { id });
+    } else {
+      logger.error("Failed to reject transaction", {
+        id,
+        error: result.error,
+      });
+    }
+
+    res.json(result);
+  } catch (error) {
+    logger.error("Failed to reject transaction", {
+      id: req.params.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    res.status(500).json({
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Failed to reject transaction",
+      timestamp: Date.now(),
+    });
+  }
+});
+
+// Get transaction by ID
+router.get("/transactions/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    logger.info("GET /transactions/:id", { id });
+
+    const transaction = transactionQueueService.getTransaction(id);
+
+    if (!transaction) {
+      return res.status(404).json({
+        success: false,
+        error: "Transaction not found",
+        timestamp: Date.now(),
+      });
+    }
+
+    const response: ApiResponse<typeof transaction> = {
+      success: true,
+      data: transaction,
+      timestamp: Date.now(),
+    };
+
+    res.json(response);
+  } catch (error) {
+    logger.error("Failed to get transaction", {
+      id: req.params.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    res.status(500).json({
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Failed to get transaction",
+      timestamp: Date.now(),
+    });
+  }
+});
+
+export default router;

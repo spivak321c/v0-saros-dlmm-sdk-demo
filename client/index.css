@@ -159,53 +159,53 @@
   --elevate-1: rgba(255, 255, 255, 0.04);
   --elevate-2: rgba(255, 255, 255, 0.09);
 
-  --background: 222 47% 11%;
+  --background: 235 45% 9%;
 
   --foreground: 210 40% 98%;
 
-  --border: 217 33% 20%;
+  --border: 220 30% 15%;
 
-  --card: 217 33% 17%;
+  --card: 235 40% 11%;
 
   --card-foreground: 210 40% 98%;
 
-  --card-border: 217 33% 20%;
+  --card-border: 220 30% 15%;
 
-  --sidebar: 215 28% 22%;
+  --sidebar: 235 38% 12%;
 
   --sidebar-foreground: 210 40% 98%;
 
-  --sidebar-border: 215 28% 26%;
+  --sidebar-border: 220 28% 18%;
 
   --sidebar-primary: 221 83% 53%;
 
   --sidebar-primary-foreground: 210 40% 98%;
 
-  --sidebar-accent: 215 20% 28%;
+  --sidebar-accent: 220 25% 20%;
 
   --sidebar-accent-foreground: 210 40% 98%;
 
   --sidebar-ring: 221 83% 53%;
 
-  --popover: 215 28% 25%;
+  --popover: 220 32% 16%;
 
   --popover-foreground: 210 40% 98%;
 
-  --popover-border: 215 28% 28%;
+  --popover-border: 220 28% 20%;
 
   --primary: 221 83% 53%;
 
   --primary-foreground: 210 40% 98%;
 
-  --secondary: 215 20% 30%;
+  --secondary: 220 25% 22%;
 
   --secondary-foreground: 210 40% 98%;
 
-  --muted: 215 16% 27%;
+  --muted: 220 20% 18%;
 
-  --muted-foreground: 215 20% 65%;
+  --muted-foreground: 220 20% 65%;
 
-  --accent: 215 16% 29%;
+  --accent: 220 20% 20%;
 
   --accent-foreground: 210 40% 98%;
 
@@ -213,7 +213,7 @@
 
   --destructive-foreground: 210 40% 98%;
 
-  --input: 215 20% 50%;
+  --input: 220 20% 50%;
   --ring: 221 83% 53%;
   --chart-1: 221 83% 65%;
   --chart-2: 142 76% 50%;
@@ -321,6 +321,19 @@
   /* Hide ugly search cancel button in Chrome until we can style it properly */
   input[type="search"]::-webkit-search-cancel-button {
     @apply hidden;
+  }
+
+  /* Wallet button custom styling */
+  .wallet-button-wrapper button {
+    @apply transition-all duration-200;
+  }
+
+  .wallet-button-wrapper button:hover {
+    @apply scale-105;
+  }
+
+  .wallet-button-wrapper button:active {
+    @apply scale-95;
   }
 
   /* Placeholder styling for contentEditable div */

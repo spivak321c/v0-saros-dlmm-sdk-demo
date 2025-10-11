@@ -3,7 +3,7 @@
  * Handles scheduled automated tasks like rebalancing and monitoring
  */
 
-import { PublicKey, Keypair } from "@solana/web3.js";
+import { PublicKey, Keypair, Transaction } from "@solana/web3.js";
 import { config } from "../config";
 import { logger } from "../utils/logger";
 import {
@@ -16,6 +16,9 @@ import { ValidationError } from "../utils/errors";
 import { RebalanceService } from "./rebalance.service";
 import { StopLossService } from "./stoploss.service";
 import { DLMMService } from "./dlmm.service";
+import { transactionQueueService } from "./transaction-queue.service";
+import { telegramBot } from "./telegram-bot";
+import storage from "../storage";
 
 export class AutomationService {
   private rebalanceService: RebalanceService;
@@ -172,17 +175,16 @@ export class AutomationService {
 
     const interval = setInterval(async () => {
       try {
-        // Note: In production, you'd need to securely manage keypairs
-        // This is a placeholder - actual implementation would need proper key management
-        logger.debug("Auto-executing job", { id: job.id });
+        logger.debug("Auto-checking job", { id: job.id });
 
-        // For now, we just log that the job would run
-        // In production, you'd execute with proper credentials
+        // Check if action is needed and queue transaction for approval
+        await this.checkAndQueueTransaction(job);
+
         job.lastRun = Date.now();
         job.nextRun = Date.now() + intervalMs;
         this.jobs.set(job.id, job);
       } catch (error: any) {
-        logger.error("Error in scheduled job execution", {
+        logger.error("Error in scheduled job check", {
           id: job.id,
           error: error.message,
         });
@@ -224,19 +226,17 @@ export class AutomationService {
       switch (job.type) {
         case "rebalance":
           action = "rebalance";
-          const rebalanceParams = job.config as RebalanceParams;
-
-          // For automated rebalancing, we don't specify liquidity amounts
-          // The rebalance service will handle liquidity transfer internally
-          const automatedParams = {
-            ...rebalanceParams,
-          };
-
-          const rebalanceResult = await this.rebalanceService.rebalancePosition(
-            automatedParams,
-            signerKeypair
+          // Rebalancing is now handled via transaction queue
+          // This case should not be reached in normal operation
+          logger.warn(
+            "Direct rebalance execution attempted, should use transaction queue",
+            {
+              positionAddress: job.positionKey.toString(),
+            }
           );
-          details = rebalanceResult.data || {};
+          details = {
+            message: "Rebalancing requires user approval via transaction queue",
+          };
           break;
 
         case "stop-loss":
@@ -361,6 +361,126 @@ export class AutomationService {
       data: job,
       timestamp: Date.now(),
     };
+  }
+
+  /**
+   * Check if action is needed and queue transaction for user approval
+   */
+  private async checkAndQueueTransaction(job: AutomationJob): Promise<void> {
+    try {
+      switch (job.type) {
+        case "rebalance":
+          await this.checkRebalanceAndQueue(job);
+          break;
+        case "stop-loss":
+          await this.checkStopLossAndQueue(job);
+          break;
+        case "monitor":
+          // Monitoring doesn't queue transactions, just logs
+          await this.dlmmService.getPositionMetrics(job.positionKey.toString());
+          break;
+      }
+    } catch (error: any) {
+      logger.error("Failed to check and queue transaction", {
+        jobId: job.id,
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Check if rebalance is needed and queue transaction
+   */
+  private async checkRebalanceAndQueue(job: AutomationJob): Promise<void> {
+    const positionAddress = job.positionKey.toString();
+    const rebalanceParams = job.config as RebalanceParams;
+
+    const shouldRebalance =
+      await this.rebalanceService.shouldRebalance(positionAddress);
+
+    if (!shouldRebalance) {
+      logger.debug("Position does not need rebalancing", { positionAddress });
+      return;
+    }
+
+    logger.info("Position needs rebalancing, preparing transaction", {
+      positionAddress,
+    });
+
+    try {
+      // Get position data from storage
+      const positionData = storage.getPosition(positionAddress);
+      if (!positionData) {
+        logger.error("Position not found in storage", { positionAddress });
+        return;
+      }
+
+      // Create unsigned rebalance transaction
+      const unsignedTx =
+        await this.rebalanceService.createUnsignedRebalanceTransaction(
+          rebalanceParams
+        );
+
+      if (!unsignedTx.success || !unsignedTx.data) {
+        logger.error("Failed to create unsigned rebalance transaction", {
+          positionAddress,
+        });
+        return;
+      }
+
+      // Deserialize the base64 transaction string to Transaction object
+      const transactionBuffer = Buffer.from(
+        unsignedTx.data.transaction,
+        "base64"
+      );
+      const transaction = Transaction.from(transactionBuffer);
+
+      // Queue the transaction for user approval
+      const queuedTransaction = await transactionQueueService.queueTransaction(
+        "rebalance",
+        positionAddress,
+        positionData.position.owner,
+        transaction,
+        {
+          poolAddress: positionData.pool.address,
+          oldRange: {
+            lowerBinId: positionData.position.lowerBinId,
+            upperBinId: positionData.position.upperBinId,
+          },
+          newRange: unsignedTx.data.newRange,
+          reason: unsignedTx.data.reason || "Position out of range",
+          estimatedValue: positionData.currentValue,
+        }
+      );
+
+      // Send Telegram notification
+      await telegramBot.sendTransactionApprovalAlert(
+        queuedTransaction.id,
+        "rebalance",
+        positionAddress,
+        queuedTransaction.metadata
+      );
+
+      logger.info("Rebalance transaction queued and notifications sent", {
+        transactionId: queuedTransaction.id,
+        positionAddress,
+      });
+    } catch (error: any) {
+      logger.error("Error in checkRebalanceAndQueue", {
+        positionAddress,
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Check if stop loss is triggered and queue transaction
+   */
+  private async checkStopLossAndQueue(job: AutomationJob): Promise<void> {
+    const positionAddress = job.positionKey.toString();
+
+    // TODO: Check stop loss condition and queue transaction if triggered
+    logger.debug("Checking stop loss", { positionAddress });
   }
 
   /**

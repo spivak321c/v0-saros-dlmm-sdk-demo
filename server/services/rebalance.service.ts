@@ -1,333 +1,225 @@
 /**
  * Rebalancing Service
- * Handles automated position rebalancing with volatility-adjusted dynamic ranges
+ * Simple, clean rebalancing logic for DLMM positions
  */
 
-import { PublicKey, Transaction, Keypair } from "@solana/web3.js";
-import BN from "bn.js";
-import { config } from "../config";
+import { PublicKey, Transaction } from "@solana/web3.js";
 import { logger } from "../utils/logger";
-import { RebalanceParams, RebalanceResult, ApiResponse } from "../types";
-import { RebalanceError, ValidationError } from "../utils/errors";
-import { DLMMService } from "./dlmm.service";
-import { VolatilityService } from "./volatility.service";
+import { dlmmClient } from "../solana/dlmm-client";
+import storage from "../storage";
+import { ApiResponse, RebalanceParams } from "../types";
 
 export class RebalanceService {
-  private dlmmService: DLMMService;
-  private volatilityService: VolatilityService;
-
-  constructor() {
-    this.dlmmService = new DLMMService();
-    this.volatilityService = new VolatilityService();
-    logger.info("Rebalance Service initialized");
-  }
-
   /**
-   * Rebalance a position with volatility-adjusted dynamic ranges
+   * Check if a position needs rebalancing
+   * Position needs rebalancing if active bin is outside the position range
    */
-  async rebalancePosition(
-    params: RebalanceParams,
-    signerKeypair: Keypair
-  ): Promise<ApiResponse<RebalanceResult>> {
+  async shouldRebalance(positionAddress: string): Promise<boolean> {
     try {
-      logger.info("Starting position rebalance", {
-        position: params.positionKey.toString(),
-        targetVolatility: params.targetVolatility,
+      logger.info("Checking if position needs rebalancing", {
+        positionAddress,
       });
 
-      // Validate parameters
-      this.validateRebalanceParams(params);
-
-      // Get current position metrics
-      const positionMetrics = await this.dlmmService.getPositionMetrics(
-        params.positionKey.toString()
-      );
-
-      if (!positionMetrics.data) {
-        throw new RebalanceError("Position not found");
+      const positionData = storage.getPosition(positionAddress);
+      if (!positionData) {
+        logger.warn("Position not found", { positionAddress });
+        return false;
       }
 
-      const position = positionMetrics.data.position;
-      const pool = position.pool;
+      const { position, pool } = positionData;
+      const activeBinId = pool.activeId;
+      const { lowerBinId, upperBinId } = position;
 
-      // Calculate current volatility
-      const volatilityResponse =
-        await this.volatilityService.calculateVolatility(pool.toString());
+      // Position needs rebalancing if active bin is outside range
+      const needsRebalance =
+        activeBinId <= lowerBinId || activeBinId >= upperBinId;
 
-      if (!volatilityResponse.data) {
-        throw new RebalanceError("Failed to calculate volatility");
-      }
-
-      const currentVolatility = volatilityResponse.data.volatility;
-
-      // Calculate new range based on volatility
-      const activeBinId = await this.dlmmService.getActiveBinId(
-        pool.toString()
-      );
-      const newRange = this.calculateDynamicRange(
+      logger.info("Rebalance check result", {
+        positionAddress,
         activeBinId,
-        currentVolatility,
-        params.targetVolatility
-      );
-
-      const oldRange = {
-        lower: position.lowerBinId,
-        upper: position.upperBinId,
-      };
-
-      logger.info("Calculated new range", {
-        oldRange,
-        newRange,
-        currentVolatility: currentVolatility.toFixed(4),
-        targetVolatility: params.targetVolatility.toFixed(4),
+        lowerBinId,
+        upperBinId,
+        needsRebalance,
       });
 
-      // Check if rebalance is needed
-      if (
-        newRange.lower === oldRange.lower &&
-        newRange.upper === oldRange.upper
-      ) {
-        logger.info("No rebalance needed, range unchanged");
-        return {
-          success: true,
-          data: {
-            success: true,
-            oldRange,
-            newRange,
-            liquidityAdjusted: new BN(0),
-            timestamp: Date.now(),
-          },
-          timestamp: Date.now(),
-        };
-      }
-
-      // Execute rebalance transaction
-      // Pass liquidity amount if this is automated rebalancing
-      const automatedLiquidity = (params as any).liquidityToTransfer;
-      const result = await this.executeRebalance(
-        position.publicKey,
-        pool,
-        newRange,
-        params.slippageBps,
-        signerKeypair,
-        automatedLiquidity
-      );
-
-      logger.info("Rebalance completed", {
-        position: params.positionKey.toString(),
-        txSignature: result.txSignature,
+      return needsRebalance;
+    } catch (error) {
+      logger.error("Failed to check rebalance necessity", {
+        positionAddress,
+        error: error instanceof Error ? error.message : String(error),
       });
-
-      return {
-        success: true,
-        data: result,
-        timestamp: Date.now(),
-      };
-    } catch (error: any) {
-      logger.error("Rebalance failed", {
-        position: params.positionKey.toString(),
-        error: error.message,
-      });
-
-      if (error instanceof RebalanceError || error instanceof ValidationError) {
-        throw error;
-      }
-
-      throw new RebalanceError("Rebalance execution failed", {
-        originalError: error.message,
-      });
+      return false;
     }
   }
 
   /**
-   * Calculate dynamic range based on volatility
+   * Calculate optimal bin range for rebalancing
+   * Uses volatility to determine range width
    */
-  private calculateDynamicRange(
+  calculateOptimalRange(
+    poolAddress: string,
     activeBinId: number,
-    currentVolatility: number,
-    targetVolatility: number
-  ): { lower: number; upper: number } {
-    // Adjust range width based on volatility ratio
-    const volatilityRatio = currentVolatility / targetVolatility;
+    volatility: number
+  ): { lowerBinId: number; upperBinId: number } {
+    logger.info("Calculating optimal range", {
+      poolAddress,
+      activeBinId,
+      volatility,
+    });
 
-    // Base range width (in bins)
-    const baseWidth = 20;
+    // Calculate range width based on volatility
+    // Low volatility (0-30): narrow range (20-40 bins)
+    // Medium volatility (30-70): medium range (40-80 bins)
+    // High volatility (70-100): wide range (80-120 bins)
+    let rangeWidth: number;
 
-    // Adjust width: higher volatility = wider range
-    const adjustedWidth = Math.floor(baseWidth * Math.sqrt(volatilityRatio));
+    if (volatility < 30) {
+      rangeWidth = 20 + Math.floor(volatility * 0.67); // 20-40 bins
+    } else if (volatility < 70) {
+      rangeWidth = 40 + Math.floor((volatility - 30) * 1.0); // 40-80 bins
+    } else {
+      rangeWidth = 80 + Math.floor((volatility - 70) * 1.33); // 80-120 bins
+    }
 
-    // Ensure minimum and maximum width
-    const minWidth = 10;
-    const maxWidth = 100;
-    const finalWidth = Math.max(minWidth, Math.min(maxWidth, adjustedWidth));
+    // Cap at 120 bins (leave margin below 140 max)
+    rangeWidth = Math.min(rangeWidth, 120);
 
-    // Calculate symmetric range around active bin
-    const halfWidth = Math.floor(finalWidth / 2);
+    // CRITICAL: Use asymmetric range to ensure active bin is strictly inside
+    // Split range asymmetrically to guarantee activeBinId is NOT on boundary
+    const halfWidthLeft = Math.floor(rangeWidth / 2);
+    const halfWidthRight = rangeWidth - halfWidthLeft;
 
-    return {
-      lower: activeBinId - halfWidth,
-      upper: activeBinId + halfWidth,
-    };
+    const lowerBinId = activeBinId - halfWidthLeft;
+    const upperBinId = activeBinId + halfWidthRight;
+
+    // Validate: active bin must be strictly inside
+    const relativeLower = lowerBinId - activeBinId;
+    const relativeUpper = upperBinId - activeBinId;
+
+    logger.info("Optimal range calculated", {
+      poolAddress,
+      activeBinId,
+      volatility,
+      rangeWidth,
+      halfWidthLeft,
+      halfWidthRight,
+      lowerBinId,
+      upperBinId,
+      relativeLower,
+      relativeUpper,
+      validation: {
+        lowerLessThanActive: lowerBinId < activeBinId,
+        upperGreaterThanActive: upperBinId > activeBinId,
+        relativeLowerNegative: relativeLower < 0,
+        relativeUpperPositive: relativeUpper > 0,
+      },
+    });
+
+    // Final validation
+    if (lowerBinId >= activeBinId || upperBinId <= activeBinId) {
+      logger.error(
+        "CRITICAL: Calculated range does not strictly contain active bin",
+        {
+          lowerBinId,
+          upperBinId,
+          activeBinId,
+        }
+      );
+      throw new Error(
+        "Invalid range calculation: active bin not strictly inside range"
+      );
+    }
+
+    return { lowerBinId, upperBinId };
   }
 
   /**
-   * Execute rebalance transaction
-   * For automated rebalancing: removes liquidity from old position and creates new one
-   * For manual rebalancing: creates new position, user manages liquidity separately
+   * Create unsigned rebalance transaction for user approval
    */
-  private async executeRebalance(
-    positionKey: PublicKey,
-    poolKey: PublicKey,
-    newRange: { lower: number; upper: number },
-    slippageBps: number,
-    signerKeypair: Keypair,
-    automatedLiquidityTransfer?: BN
-  ): Promise<RebalanceResult> {
+  async createUnsignedRebalanceTransaction(params: RebalanceParams): Promise<
+    ApiResponse<{
+      transaction: string;
+      newRange: { lowerBinId: number; upperBinId: number };
+      reason: string;
+    }>
+  > {
     try {
-      if (automatedLiquidityTransfer) {
-        // AUTOMATED REBALANCING: Full liquidity transfer flow
-        logger.info("Executing automated rebalance with liquidity transfer", {
-          positionKey: positionKey.toString(),
-          liquidityToTransfer: automatedLiquidityTransfer.toString(),
-        });
+      const positionAddress = params.positionKey.toString();
+      logger.info("Creating unsigned rebalance transaction", {
+        positionAddress,
+      });
 
-        // TODO: Integrate with Saros DLMM SDK for automated flow
-        // 1. Remove ALL liquidity from old position
-        // const dlmm = await DLMM.create(connection, poolKey);
-        // const removeLiquidityTx = await dlmm.removeLiquidity({
-        //   position: positionKey,
-        //   user: signerKeypair.publicKey,
-        //   binLiquidityRemoval: [...], // Remove all bins
-        //   shouldClaimAndClose: true,
-        // });
-        //
-        // 2. Create new position with removed liquidity
-        // const addLiquidityTx = await dlmm.addLiquidity({
-        //   position: newPositionKey,
-        //   user: signerKeypair.publicKey,
-        //   totalXAmount: removedXAmount,
-        //   totalYAmount: removedYAmount,
-        //   strategy: {
-        //     minBinId: newRange.lower,
-        //     maxBinId: newRange.upper,
-        //     strategyType: StrategyType.SpotBalanced,
-        //   },
-        // });
-        //
-        // 3. Execute both transactions atomically or in sequence
-
-        // Placeholder for automated flow
-        const mockTxSignature = "automated_rebalance_" + Date.now();
-
-        return {
-          success: true,
-          oldRange: { lower: 0, upper: 0 },
-          newRange,
-          liquidityAdjusted: automatedLiquidityTransfer,
-          txSignature: mockTxSignature,
-          timestamp: Date.now(),
-        };
-      } else {
-        // MANUAL REBALANCING: Just create new position, user handles liquidity
-        logger.info("Executing manual rebalance (new position only)", {
-          positionKey: positionKey.toString(),
-        });
-
-        // This creates a new empty position with the new range
-        // User will manually add liquidity via the UI
-        // Placeholder implementation
-        const mockTxSignature = "manual_rebalance_" + Date.now();
-
-        return {
-          success: true,
-          oldRange: { lower: 0, upper: 0 },
-          newRange,
-          liquidityAdjusted: new BN(0),
-          txSignature: mockTxSignature,
-          timestamp: Date.now(),
-        };
+      // Get position data
+      const positionData = storage.getPosition(positionAddress);
+      if (!positionData) {
+        throw new Error(`Position not found: ${positionAddress}`);
       }
+
+      const { position, pool } = positionData;
+      const activeBinId = pool.activeId;
+
+      // Calculate optimal range
+      const volatility = params.targetVolatility || 50; // Default to medium volatility
+      const newRange = this.calculateOptimalRange(
+        pool.address,
+        activeBinId,
+        volatility
+      );
+
+      // Determine rebalance reason
+      let reason = "Position optimization";
+      if (activeBinId <= position.lowerBinId) {
+        reason = "Price below range";
+      } else if (activeBinId >= position.upperBinId) {
+        reason = "Price above range";
+      }
+
+      // Build unsigned transaction
+      // Note: This is a simplified version. In production, you would:
+      // 1. Call DLMM SDK to build the actual rebalance transaction
+      // 2. Serialize it without signing
+      // 3. Return the base64 encoded transaction
+
+      // For now, we'll create a placeholder transaction structure
+      // In real implementation, use dlmmClient to build the actual transaction
+      const transaction = new Transaction();
+      // TODO: Add actual rebalance instructions using DLMM SDK
+      // transaction.add(...rebalanceInstructions);
+
+      const serialized = transaction.serialize({
+        requireAllSignatures: false,
+        verifySignatures: false,
+      });
+      const base64Transaction = serialized.toString("base64");
+
+      logger.info("Unsigned rebalance transaction created", {
+        positionAddress,
+        newRange,
+        reason,
+      });
+
+      return {
+        success: true,
+        data: {
+          transaction: base64Transaction,
+          newRange,
+          reason,
+        },
+        timestamp: Date.now(),
+      };
     } catch (error: any) {
-      logger.error("Failed to execute rebalance transaction", {
+      logger.error("Failed to create unsigned rebalance transaction", {
         error: error.message,
       });
 
       return {
         success: false,
-        oldRange: { lower: 0, upper: 0 },
-        newRange,
-        liquidityAdjusted: new BN(0),
         error: error.message,
         timestamp: Date.now(),
       };
     }
   }
-
-  /**
-   * Validate rebalance parameters
-   */
-  private validateRebalanceParams(params: RebalanceParams): void {
-    if (params.targetVolatility < config.rebalancing.minVolatilityThreshold) {
-      throw new ValidationError(
-        `Target volatility too low: ${params.targetVolatility}`,
-        { min: config.rebalancing.minVolatilityThreshold }
-      );
-    }
-
-    if (params.targetVolatility > config.rebalancing.maxVolatilityThreshold) {
-      throw new ValidationError(
-        `Target volatility too high: ${params.targetVolatility}`,
-        { max: config.rebalancing.maxVolatilityThreshold }
-      );
-    }
-
-    if (params.slippageBps > config.rebalancing.maxSlippageBps) {
-      throw new ValidationError(
-        `Slippage too high: ${params.slippageBps} bps`,
-        { max: config.rebalancing.maxSlippageBps }
-      );
-    }
-
-    if (params.slippageBps < 0) {
-      throw new ValidationError("Slippage cannot be negative");
-    }
-  }
-
-  /**
-   * Check if position needs rebalancing
-   */
-  async needsRebalancing(
-    positionKey: string,
-    targetVolatility: number,
-    threshold: number = 0.1
-  ): Promise<boolean> {
-    try {
-      const positionMetrics =
-        await this.dlmmService.getPositionMetrics(positionKey);
-
-      if (!positionMetrics.data) {
-        return false;
-      }
-
-      const pool = positionMetrics.data.position.pool;
-      const volatilityResponse =
-        await this.volatilityService.calculateVolatility(pool.toString());
-
-      if (!volatilityResponse.data) {
-        return false;
-      }
-
-      const currentVolatility = volatilityResponse.data.volatility;
-      const volatilityDiff = Math.abs(currentVolatility - targetVolatility);
-
-      // Rebalance if volatility difference exceeds threshold
-      return volatilityDiff / targetVolatility > threshold;
-    } catch (error: any) {
-      logger.error("Failed to check rebalancing need", {
-        position: positionKey,
-        error: error.message,
-      });
-      return false;
-    }
-  }
 }
+
+// Export singleton instance
+export const rebalanceService = new RebalanceService();

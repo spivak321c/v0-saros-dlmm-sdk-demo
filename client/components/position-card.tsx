@@ -130,7 +130,7 @@ export function PositionCard({ position, onCollectFees, onRebalance, wallet }: P
 
   return (
     <>
-    <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => setShowDetailModal(true)}>
+    <Card className="hover:shadow-md transition-shadow cursor-pointer">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="space-y-1">
@@ -202,10 +202,7 @@ export function PositionCard({ position, onCollectFees, onRebalance, wallet }: P
         {/* Actions */}
         <div className="flex gap-2 pt-2">
           <Button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowDetailModal(true);
-            }}
+            onClick={() => setShowDetailModal(true)}
             variant="outline"
             className="flex-1 gap-2"
             size="sm"
@@ -214,10 +211,7 @@ export function PositionCard({ position, onCollectFees, onRebalance, wallet }: P
             Details
           </Button>
           <Button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleRebalance();
-            }}
+            onClick={handleRebalance}
             variant={isInRange ? "outline" : "default"}
             className="flex-1 gap-2"
             size="sm"

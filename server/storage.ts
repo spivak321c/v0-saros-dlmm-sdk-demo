@@ -15,6 +15,7 @@ interface StorageData {
   rebalanceEvents: RebalanceEvent[];
   alerts: Alert[];
   stopLossConfigs: Record<string, StopLossConfig>;
+  transactionQueue?: any[]; // For transaction queue persistence
   settings: {
     telegram: {
       enabled: boolean;
@@ -61,6 +62,7 @@ class Storage {
       rebalanceEvents: [],
       alerts: [],
       stopLossConfigs: {},
+      transactionQueue: [],
       settings: {
         telegram: { enabled: false, botToken: "", chatId: "" },
         rebalancing: {
@@ -279,6 +281,20 @@ class Storage {
 
   public getInitialPrice(positionAddress: string): number | undefined {
     return this.initialPrices.get(positionAddress);
+  }
+
+  public getRebalancingSettings() {
+    return this.data.settings.rebalancing;
+  }
+
+  // Generic get/set for additional data (like transaction queue)
+  public get(key: string): any {
+    return (this.data as any)[key];
+  }
+
+  public set(key: string, value: any): void {
+    (this.data as any)[key] = value;
+    this.saveToFile();
   }
 }
 

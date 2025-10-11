@@ -86,10 +86,7 @@ export function PoolDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="max-w-4xl max-h-[90vh] overflow-y-auto"
-        onInteractOutside={(e) => e.preventDefault()}
-      >
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-start justify-between">
             <div className="space-y-1">
@@ -130,7 +127,9 @@ export function PoolDetailModal({
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-2xl font-bold">${tvl.toFixed(2)}</p>
+                  <p className="text-2xl font-bold">
+                    ${tvl?.toFixed(2) || "0.00"}
+                  </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     Total Value Locked
                   </p>
@@ -145,7 +144,9 @@ export function PoolDetailModal({
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-2xl font-bold">${volume24h.toFixed(2)}</p>
+                  <p className="text-2xl font-bold">
+                    ${volume24h?.toFixed(2) || "0.00"}
+                  </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     Trading volume
                   </p>
@@ -161,7 +162,7 @@ export function PoolDetailModal({
                 </CardHeader>
                 <CardContent>
                   <p className="text-2xl font-bold text-green-600">
-                    ${fees24h.toFixed(2)}
+                    ${fees24h?.toFixed(2) || "0.00"}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     Protocol fees earned
@@ -256,7 +257,7 @@ export function PoolDetailModal({
                   <div>
                     <p className="text-xs text-muted-foreground">Reserve</p>
                     <p className="text-sm font-semibold">
-                      {pool.reserveXAmount.toFixed(2)}
+                      {pool.reserveXAmount?.toFixed(2) || "0.00"}
                     </p>
                   </div>
                 </CardContent>
@@ -287,7 +288,7 @@ export function PoolDetailModal({
                   <div>
                     <p className="text-xs text-muted-foreground">Reserve</p>
                     <p className="text-sm font-semibold">
-                      {pool.reserveYAmount.toFixed(2)}
+                      {pool.reserveYAmount?.toFixed(2) || "0.00"}
                     </p>
                   </div>
                 </CardContent>
@@ -311,13 +312,13 @@ export function PoolDetailModal({
                       {pool.tokenX?.symbol} Reserve
                     </span>
                     <span className="text-sm font-semibold">
-                      {reserveRatio.toFixed(1)}%
+                      {reserveRatio?.toFixed(1) || "0.0"}%
                     </span>
                   </div>
                   <Progress value={reserveRatio} className="h-2" />
                   <p className="text-xs text-muted-foreground mt-1">
-                    {pool.reserveXAmount.toFixed(2)} {pool.tokenX?.symbol} ($
-                    {reserveXUSD.toFixed(2)})
+                    {pool.reserveXAmount?.toFixed(2) || "0.00"}{" "}
+                    {pool.tokenX?.symbol} (${reserveXUSD?.toFixed(2) || "0.00"})
                   </p>
                 </div>
 
@@ -327,13 +328,13 @@ export function PoolDetailModal({
                       {pool.tokenY?.symbol} Reserve
                     </span>
                     <span className="text-sm font-semibold">
-                      {(100 - reserveRatio).toFixed(1)}%
+                      {(100 - (reserveRatio || 0))?.toFixed(1) || "0.0"}%
                     </span>
                   </div>
                   <Progress value={100 - reserveRatio} className="h-2" />
                   <p className="text-xs text-muted-foreground mt-1">
-                    {pool.reserveYAmount.toFixed(2)} {pool.tokenY?.symbol} ($
-                    {reserveYUSD.toFixed(2)})
+                    {pool.reserveYAmount?.toFixed(2) || "0.00"}{" "}
+                    {pool.tokenY?.symbol} (${reserveYUSD?.toFixed(2) || "0.00"})
                   </p>
                 </div>
 
@@ -344,7 +345,7 @@ export function PoolDetailModal({
                         Total Liquidity
                       </p>
                       <p className="text-xl font-bold">
-                        ${totalReserveUSD.toFixed(2)}
+                        ${totalReserveUSD?.toFixed(2) || "0.00"}
                       </p>
                     </div>
                     <div>

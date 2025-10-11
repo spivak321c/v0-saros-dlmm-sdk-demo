@@ -32,13 +32,6 @@ interface VolatilityData {
   tokenY?: { symbol: string };
 }
 
-interface Pool {
-  address: string;
-  tokenX: { symbol: string; mint: string };
-  tokenY: { symbol: string; mint: string };
-  currentPrice: number;
-}
-
 export default function Volatility() {
   const {
     pools,
@@ -77,15 +70,15 @@ export default function Volatility() {
 
       if (result.success && Array.isArray(result.data)) {
         // Merge with existing pools to avoid duplicates
-        setPools((prevPools: Pool[]) => {
+        setPools((prevPools) => {
           const poolMap = new Map(prevPools.map((p) => [p.address, p]));
-          result.data.forEach((pool: Pool) => poolMap.set(pool.address, pool));
+          result.data.forEach((pool: any) => poolMap.set(pool.address, pool));
           return Array.from(poolMap.values());
         });
 
         // Auto-load volatility for first 5 pools if this is the first load
         if (page === 1) {
-          result.data.slice(0, 5).forEach((pool: Pool) => {
+          result.data.slice(0, 5).forEach((pool: any) => {
             loadVolatilityForPool(pool.address);
           });
         }
@@ -283,7 +276,7 @@ export default function Volatility() {
                           Current Price
                         </span>
                         <span className="font-medium">
-                          ${pool.currentPrice.toFixed(4)}
+                          ${(pool.currentPrice || 0).toFixed(4)}
                         </span>
                       </div>
 

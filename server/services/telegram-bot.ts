@@ -407,6 +407,88 @@ export class TelegramBot {
     await this.sendMessage(message);
   }
 
+  /**
+   * Send notification for pending transaction approval
+   */
+  async sendTransactionApprovalAlert(
+    transactionId: string,
+    type: "rebalance" | "stop-loss" | "close-position",
+    positionAddress: string,
+    metadata: {
+      poolAddress: string;
+      oldRange?: { lowerBinId: number; upperBinId: number };
+      newRange?: { lowerBinId: number; upperBinId: number };
+      reason: string;
+      estimatedValue?: number;
+    }
+  ) {
+    if (!this.config.enabled) return;
+
+    const emoji = {
+      rebalance: "🔄",
+      "stop-loss": "🛑",
+      "close-position": "❌",
+    }[type];
+
+    const title = {
+      rebalance: "Rebalance Required",
+      "stop-loss": "Stop-Loss Triggered",
+      "close-position": "Position Close Recommended",
+    }[type];
+
+    let message = `${emoji} *${title}*\n\n`;
+    message += `Position: \`${positionAddress.slice(0, 8)}...${positionAddress.slice(-8)}\`\n`;
+    message += `Reason: ${metadata.reason}\n\n`;
+
+    if (metadata.oldRange && metadata.newRange) {
+      message += `Old Range: [${metadata.oldRange.lowerBinId}, ${metadata.oldRange.upperBinId}]\n`;
+      message += `New Range: [${metadata.newRange.lowerBinId}, ${metadata.newRange.upperBinId}]\n\n`;
+    }
+
+    if (metadata.estimatedValue) {
+      message += `Estimated Value: $${metadata.estimatedValue.toFixed(2)}\n\n`;
+    }
+
+    message += `⚠️ *Action Required*\n`;
+    message += `Please review and approve this transaction in the app.\n\n`;
+    message += `Transaction ID: \`${transactionId}\``;
+
+    await this.sendMessage(message);
+  }
+
+  /**
+   * Send notification when transaction is executed
+   */
+  async sendTransactionExecutedAlert(
+    type: "rebalance" | "stop-loss" | "close-position",
+    positionAddress: string,
+    signature: string,
+    success: boolean,
+    error?: string
+  ) {
+    if (!this.config.enabled) return;
+
+    const emoji = success ? "✅" : "❌";
+    const status = success ? "Executed Successfully" : "Execution Failed";
+
+    const title = {
+      rebalance: "Rebalance",
+      "stop-loss": "Stop-Loss",
+      "close-position": "Position Close",
+    }[type];
+
+    let message = `${emoji} *${title} ${status}*\n\n`;
+    message += `Position: \`${positionAddress.slice(0, 8)}...${positionAddress.slice(-8)}\`\n`;
+
+    if (success) {
+      message += `Signature: \`${signature.slice(0, 8)}...${signature.slice(-8)}\`\n`;
+    } else if (error) {
+      message += `Error: ${error}\n`;
+    }
+
+    await this.sendMessage(message);
+  }
+
   async sendAlert(alert: Alert) {
     if (!this.config.enabled) return;
 
