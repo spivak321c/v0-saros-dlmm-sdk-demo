@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { PublicKey, Keypair, Transaction } from "@solana/web3.js";
 import BN from "bn.js";
 import { positionMonitor } from "./services/position-monitor";
@@ -17,7 +17,7 @@ import storage from "./storage";
 import { logger } from "./utils/logger";
 import type { ApiResponse } from "../shared/schema";
 
-const router = Router();
+const router: Router = Router();
 const simulatorService = new SimulatorService();
 
 // Positions
@@ -38,13 +38,13 @@ router.get("/positions/:wallet", async (req, res) => {
     logger.info("All stored positions count", {
       total: allStoredPositions.length,
     });
-
+    
     const storedPositionsWithoutOwner = allStoredPositions.filter(
       (p) => !p.position.owner || p.position.owner === ""
     );
     logger.info("Stored positions without owner", {
       count: storedPositionsWithoutOwner.length,
-      addresses: storedPositionsWithoutOwner.map((p) => p.position.address),
+      addresses: storedPositionsWithoutOwner.map(p => p.position.address),
     });
 
     // Merge both lists, avoiding duplicates
@@ -1459,7 +1459,7 @@ router.post("/transactions/approve/:id", async (req, res) => {
       await telegramBot.sendTransactionExecutedAlert(
         transaction.type,
         transaction.positionAddress,
-        executeResult.data?.signature || "",
+        executeResult.data?.signature || '',
         true
       );
 
@@ -1472,7 +1472,7 @@ router.post("/transactions/approve/:id", async (req, res) => {
       await telegramBot.sendTransactionExecutedAlert(
         transaction.type,
         transaction.positionAddress,
-        "",
+        '',
         false,
         executeResult.error
       );
@@ -1492,9 +1492,7 @@ router.post("/transactions/approve/:id", async (req, res) => {
     res.status(500).json({
       success: false,
       error:
-        error instanceof Error
-          ? error.message
-          : "Failed to approve transaction",
+        error instanceof Error ? error.message : "Failed to approve transaction",
       timestamp: Date.now(),
     });
   }
