@@ -42,3 +42,6 @@ contracts/lib/
 contracts/out/
 contracts/cache/
 contracts/broadcast/
+
+
+package-lock.json
