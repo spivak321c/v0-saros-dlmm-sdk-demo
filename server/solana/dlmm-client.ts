@@ -1,5 +1,4 @@
-import { Connection, PublicKey, Keypair } from "@solana/web3.js";
-import { Transaction } from "@saros-finance/dlmm-sdk/node_modules/@solana/web3.js";
+import { Connection, PublicKey, Keypair, Transaction } from "@solana/web3.js";
 import { getConnection } from "./connection";
 import type { PoolInfo, Position } from "../../shared/schema";
 import { LiquidityBookServices, MODE } from "@saros-finance/dlmm-sdk";

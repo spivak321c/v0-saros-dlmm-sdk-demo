@@ -587,7 +587,7 @@
       "position": {
         "address": "EFNYKkinLs6RCs5dHKuT5yLXGLEVrfyU3XMXBAqwAJWx",
         "poolAddress": "CvPk7zKeqwAgv5pVKLis98QKR1rhyq1JEC595fi4Pe7p",
-        "owner": "",
+        "owner": "4LuwejxiFouDRAaEP4V8UkRFkyQm1xBspCPhzuVPH7XJ",
         "lowerBinId": 8388698,
         "upperBinId": 8388732,
         "liquidityX": "0",
@@ -596,8 +596,8 @@
         "feeY": "0",
         "rewardOne": "0",
         "rewardTwo": "0",
-        "lastUpdatedAt": 1760153917265,
-        "createdAt": 1760153917265
+        "lastUpdatedAt": 1760191277672,
+        "createdAt": 1760191277672
       },
       "pool": {
         "address": "CvPk7zKeqwAgv5pVKLis98QKR1rhyq1JEC595fi4Pe7p",
@@ -640,7 +640,7 @@
       "position": {
         "address": "4rB5qefR7QvZAimcWeB2e9QaAgD1WzV1auPdRUQAGv1V",
         "poolAddress": "8eZc4FvCqGX2aFQ7k4qAucYtLedwetUApnadTy3Bq1AR",
-        "owner": "",
+        "owner": "4LuwejxiFouDRAaEP4V8UkRFkyQm1xBspCPhzuVPH7XJ",
         "lowerBinId": 8388835,
         "upperBinId": 8388836,
         "liquidityX": "0",
@@ -649,8 +649,8 @@
         "feeY": "0",
         "rewardOne": "0",
         "rewardTwo": "0",
-        "lastUpdatedAt": 1760153921107,
-        "createdAt": 1760153921107
+        "lastUpdatedAt": 1760191278969,
+        "createdAt": 1760191278969
       },
       "pool": {
         "address": "8eZc4FvCqGX2aFQ7k4qAucYtLedwetUApnadTy3Bq1AR",
@@ -737,6 +737,22 @@
       },
       "reason": "Manual rebalance",
       "signature": "3ibavL7FGG1Jn4CberoC3tCiRFYDUyZdgQuLY4LCVS4ggE9vPasdhzXXuDvy8zP5k4TEn9cYJHaFjVHkMs19a6UG",
+      "status": "success"
+    },
+    {
+      "id": "3QotzczWVwv2tvKg6hEeC3cuepa537k1x2PWTiWYGoQesutmaDqstW77suDkiUJMVHnx9CTPFntw5yaYK1XY5yuK",
+      "positionAddress": "GRsNp1GUbSbLF7afriykY1zDp8tNwsAELyMR4nvoAUo2",
+      "timestamp": 1760191261557,
+      "oldRange": {
+        "lowerBinId": 8388653,
+        "upperBinId": 8388654
+      },
+      "newRange": {
+        "lowerBinId": 0,
+        "upperBinId": 0
+      },
+      "reason": "Manual rebalance",
+      "signature": "3QotzczWVwv2tvKg6hEeC3cuepa537k1x2PWTiWYGoQesutmaDqstW77suDkiUJMVHnx9CTPFntw5yaYK1XY5yuK",
       "status": "success"
     }
   ],
