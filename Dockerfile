@@ -7,23 +7,20 @@
     COPY package*.json ./
     COPY server/package*.json ./server/
     
-    # Install root deps (shared dependencies)
-    RUN npm install
+    # Install root and server deps
+    RUN npm install && cd server && npm install
     
-    # Install server deps
-    RUN cd server && npm install
-    
-    # Copy relevant source files
+    # Copy source code
     COPY server ./server
     COPY shared ./shared
     
-    # Build and verify output
-    RUN cd server && npm run build && \
-        echo "Build contents:" && ls -la dist || \
-        (echo "❌ Build failed or dist not found" && exit 1)
+    # Force build output to /app/server/dist
+    RUN cd server && npx tsc --project tsconfig.json --outDir dist && \
+        echo "✅ Build completed. Checking contents:" && ls -R dist || \
+        (echo "❌ Build failed: dist missing" && exit 1)
     
     # ---- Runtime stage ----
-    FROM node:20-slim AS runner
+    FROM node:24-slim AS runner
     
     WORKDIR /app/server
     
@@ -36,6 +33,5 @@
     ENV PORT=3000
     EXPOSE ${PORT}
     
-    # Add check to confirm dist exists before start
-    CMD [ "sh", "-c", "ls -la dist || (echo '❌ dist missing'; exit 1); node dist/index.js" ]
+    CMD ["node", "dist/index.js"]
     
