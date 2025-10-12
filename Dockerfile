@@ -1,13 +1,10 @@
-# Use Node 20 (matches your deps like @types/node@20.x)
-FROM node:22-alpine
+# Use full Node 20 (Debian base—no Alpine gyp issues)
+FROM node:22
 
-# Install build tools for native deps (gyp/node-gyp fixes)
-RUN apk add --no-cache python3 make g++
-
-# Set working dir inside container (full monorepo at root)
+# Set working dir (full monorepo at root)
 WORKDIR /app
 
-# Copy package files first (for layer caching: root + server)
+# Copy package files for caching
 COPY package*.json ./
 COPY server/package*.json ./server/
 
@@ -17,26 +14,18 @@ RUN npm install
 # Install server deps
 RUN cd server && npm install
 
-# Copy full source code
+# Copy source
 COPY . .
 
-# Build: Mirrors Render command (root already installed, now server build)
+# Build server
 RUN cd server && npm run build
 
-# Prune dev deps post-build (root + server for slim image)
-RUN npm install --only=production --prefix . && \
-    cd server && npm install --only=production && \
-    npm cache clean --force
+# Prune dev deps (slim runtime)
+RUN npm prune --production
+RUN cd server && npm prune --production
 
-# Remove build tools (slim image)
-RUN apk del python3 make g++
-
-# Expose port (Railway uses $PORT env var)
+# Expose port
 EXPOSE 3000
 
-# Health check (Railway pings /health)
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
-
-# Run the app (from server dir)
+# Run from server
 CMD ["sh", "-c", "cd server && npm start"]
