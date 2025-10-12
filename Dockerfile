@@ -1,5 +1,5 @@
 # ---- Base build stage ----
-    FROM node:20 AS builder
+    FROM node:24 AS builder
 
     WORKDIR /app
     
