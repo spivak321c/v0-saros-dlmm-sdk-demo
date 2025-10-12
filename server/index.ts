@@ -1,5 +1,5 @@
-//import express from "express";
-import express, { Request, Response, NextFunction } from "express";
+import express from "express";
+//import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { createServer } from "http";
@@ -9,7 +9,7 @@ import { positionMonitor } from "./services/position-monitor";
 import { volatilityTracker } from "./services/volatility-tracker";
 import { telegramBot } from "./services/telegram-bot";
 import { logger } from "./utils/logger";
-/*
+
 dotenv.config();
 
 const app = express();
@@ -17,7 +17,13 @@ const PORT = process.env.PORT || 3001;
 const httpServer = createServer(app);
 
 // Middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: "*",
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 app.use(express.json());
 
 // Request logging middleware
@@ -89,8 +95,8 @@ process.on("SIGINT", () => {
   telegramBot.stop();
   process.exit(0);
 });
-*/
 
+/*
 dotenv.config();
 
 const app = express();
@@ -214,3 +220,4 @@ process.on("SIGINT", () => {
   telegramBot.stop();
   process.exit(0);
 });
+*/

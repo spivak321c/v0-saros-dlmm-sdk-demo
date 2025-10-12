@@ -2,15 +2,15 @@
 set -e
 
 # Install dependencies
-pnpm install
+npm install
 
 # Build frontend
-pnpm run build
+npm run build
 
 # Build backend
 cd server
-pnpm install
-pnpm run build
+npm install
+npm run build
 
 if [ ! -f "dist/index.js" ]; then
   echo "Error: Backend build failed - dist/index.js not found"
