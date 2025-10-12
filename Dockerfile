@@ -6,19 +6,15 @@ WORKDIR /app
 COPY package*.json ./
 COPY server/package*.json ./server/
 
-# Install deps (normal, no ci)
+# Install deps
 RUN npm install
 RUN cd server && npm install
 
 # Copy code
 COPY . .
 
-# Build with check (fails if no dist/index.js)
-RUN cd server && npm run build && ls -la dist/index.js || (echo "Build failed: No dist/index.js" && exit 1)
-
-# Prune dev
-RUN npm prune --production
-RUN cd server && npm prune --production
+# Build with verbose + check
+RUN cd server && npm run build -- --diagnostics && ls -la dist/index.js || (echo "Build failed: No dist/index.js—check diagnostics above" && exit 1)
 
 EXPOSE 3000
 
