@@ -1,21 +1,37 @@
-FROM node:20
+# ---- Base build stage ----
+    FROM node:20 AS builder
 
-WORKDIR /app
-
-# Copy packages
-COPY package*.json ./
-COPY server/package*.json ./server/
-
-# Install deps
-RUN npm install
-RUN cd server && npm install
-
-# Copy code
-COPY . .
-
-# Build with verbose + check
-RUN cd server && npm run build -- --diagnostics && ls -la dist/index.js || (echo "Build failed: No dist/index.js—check diagnostics above" && exit 1)
-
-EXPOSE 3000
-
-CMD ["sh", "-c", "cd server && npm start"]
+    WORKDIR /app/server
+    
+    # Copy only server and shared package files for caching
+    COPY server/package*.json ./
+    COPY shared ./../shared
+    
+    # Install dependencies (include dev for build)
+    RUN npm install
+    
+    # Copy source code
+    COPY server ./
+    
+    # Build TypeScript -> dist/
+    RUN npm run build
+    
+    # ---- Production stage ----
+    FROM node:20-slim AS runner
+    
+    WORKDIR /app/server
+    
+    # Copy only the compiled output + necessary files
+    COPY --from=builder /app/server/dist ./dist
+    COPY server/package*.json ./
+    
+    # Install only production dependencies
+    RUN npm install --omit=dev
+    
+    # Use port provided by the hosting platform (default 3000)
+    ENV PORT=3000
+    EXPOSE ${PORT}
+    
+    # Start the compiled JS server
+    CMD ["node", "dist/index.js"]
+    

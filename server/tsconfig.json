@@ -13,10 +13,6 @@
     "declarationMap": true,
     "sourceMap": true,
     "moduleResolution": "node",
-    "baseUrl": "./",
-    "paths": {
-      "shared/*": ["../shared/*"]
-    },
     "types": ["node"]
   },
   "include": [
