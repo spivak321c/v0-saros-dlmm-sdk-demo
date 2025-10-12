@@ -12,10 +12,10 @@ COPY package*.json ./
 COPY server/package*.json ./server/
 
 # Install root deps (client/shared)
-RUN npm ci
+RUN npm install
 
 # Install server deps
-RUN cd server && npm ci
+RUN cd server && npm install
 
 # Copy full source code
 COPY . .
@@ -24,8 +24,8 @@ COPY . .
 RUN cd server && npm run build
 
 # Prune dev deps post-build (root + server for slim image)
-RUN npm ci --only=production --prefix . && \
-    cd server && npm ci --only=production && \
+RUN npm install --only=production --prefix . && \
+    cd server && npm install --only=production && \
     npm cache clean --force
 
 # Remove build tools (slim image)
