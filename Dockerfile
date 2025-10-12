@@ -1,37 +1,43 @@
 # ---- Base build stage ----
     FROM node:20 AS builder
 
-    WORKDIR /app/server
+    WORKDIR /app
     
-    # Copy only server and shared package files for caching
-    COPY server/package*.json ./
-    COPY shared ./../shared
+    # Copy package files (root + server)
+    COPY package*.json ./
+    COPY server/package*.json ./server/
     
-    # Install dependencies (include dev for build)
+    # Install root dependencies first (needed for shared)
     RUN npm install
     
-    # Copy source code
-    COPY server ./
+    # Install server-specific dependencies
+    RUN cd server && npm install
     
-    # Build TypeScript -> dist/
-    RUN npm run build
+    # Copy source code (server + shared only)
+    COPY server ./server
+    COPY shared ./shared
+    
+    # Build the server (outputs to /app/server/dist)
+    RUN cd server && npm run build
     
     # ---- Production stage ----
     FROM node:20-slim AS runner
     
     WORKDIR /app/server
     
-    # Copy only the compiled output + necessary files
+    # Copy compiled server and package files
     COPY --from=builder /app/server/dist ./dist
     COPY server/package*.json ./
+    
+    # Copy shared folder (if server runtime imports from it)
+    COPY --from=builder /app/shared ./../shared
     
     # Install only production dependencies
     RUN npm install --omit=dev
     
-    # Use port provided by the hosting platform (default 3000)
+    # Port provided by Sevalla or fallback to 3000
     ENV PORT=3000
     EXPOSE ${PORT}
     
-    # Start the compiled JS server
     CMD ["node", "dist/index.js"]
     
