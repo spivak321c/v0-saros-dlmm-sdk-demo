@@ -1,11 +1,38 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { useEffect } from 'react';
 import type { PositionData, ApiResponse } from '../../shared/schema';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 export function useWalletPositions() {
-  const { publicKey } = useWallet();
+  const { publicKey, connected } = useWallet();
+  const queryClient = useQueryClient();
+
+  // Invalidate cache when wallet connects/disconnects
+  useEffect(() => {
+    if (connected && publicKey) {
+      console.log('[useWalletPositions] Wallet connected, invalidating cache');
+      queryClient.invalidateQueries({ queryKey: ['positions', publicKey.toString()] });
+    } else if (!connected) {
+      console.log('[useWalletPositions] Wallet disconnected, clearing cache');
+      queryClient.removeQueries({ queryKey: ['positions'] });
+    }
+  }, [connected, publicKey, queryClient]);
+
+  // Listen for WebSocket position updates
+  useEffect(() => {
+    const handlePositionUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.log('[useWalletPositions] Position update received via WebSocket:', customEvent.detail.type);
+      if (publicKey) {
+        queryClient.invalidateQueries({ queryKey: ['positions', publicKey.toString()] });
+      }
+    };
+
+    window.addEventListener('position-update', handlePositionUpdate);
+    return () => window.removeEventListener('position-update', handlePositionUpdate);
+  }, [publicKey, queryClient]);
 
   return useQuery({
     queryKey: ['positions', publicKey?.toString()],
@@ -32,12 +59,12 @@ export function useWalletPositions() {
       console.log('[useWalletPositions] Positions loaded:', data.data.length);
       return data.data;
     },
-    enabled: !!publicKey,
-    // Refetch more frequently to catch newly created positions
-    refetchInterval: 8000, // Refetch every 8 seconds
-    staleTime: 3000, // Consider data stale after 3 seconds
-    retry: 2, // Retry failed requests
-    retryDelay: 1000, // Wait 1 second between retries
+    enabled: !!publicKey && connected,
+    staleTime: Infinity, // Never auto-refetch
+    refetchInterval: false, // No polling
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    retry: 1
   });
 }
 

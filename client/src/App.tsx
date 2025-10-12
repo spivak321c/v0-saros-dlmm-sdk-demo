@@ -49,24 +49,27 @@ function Navigation() {
 
   return (
     <>
-      <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
+      <nav className="glass-nav relative z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12">
+          <div className="flex justify-between items-center h-16 lg:h-20">
             {/* Logo */}
-            <Link to="/" className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center">
-                <Activity className="w-5 h-5 text-primary-foreground" />
+            <Link
+              to="/"
+              className="flex items-center gap-2.5 lg:gap-3 lg:mr-12"
+            >
+              <div className="w-9 h-9 lg:w-12 lg:h-12 rounded-lg bg-primary flex items-center justify-center">
+                <Activity className="w-5 h-5 lg:w-6 lg:h-6 text-primary-foreground" />
               </div>
               <div className="hidden sm:block">
-                <h1 className="text-lg font-bold">LiquiFlow</h1>
-                <p className="text-xs text-muted-foreground -mt-0.5">
+                <h1 className="text-lg lg:text-xl font-bold">LiquiFlow</h1>
+                <p className="text-xs lg:text-sm text-muted-foreground -mt-0.5">
                   DLMM Manager
                 </p>
               </div>
             </Link>
 
             {/* Desktop Navigation */}
-            <div className="hidden lg:flex items-center gap-1">
+            <div className="hidden lg:flex items-center gap-2">
               {navigation.map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.href;
@@ -74,13 +77,13 @@ function Navigation() {
                   <Link
                     key={item.name}
                     to={item.href}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    className={`flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-base font-medium transition-colors ${
                       isActive
                         ? "bg-primary text-primary-foreground"
                         : "text-muted-foreground hover:text-foreground hover:bg-accent"
                     }`}
                   >
-                    <Icon className="w-4 h-4" />
+                    <Icon className="w-5 h-5" />
                     <span>{item.name}</span>
                   </Link>
                 );
@@ -88,8 +91,8 @@ function Navigation() {
             </div>
 
             {/* Right Actions */}
-            <div className="flex items-center gap-2">
-              <div className="hidden sm:flex items-center gap-2">
+            <div className="flex items-center gap-2 lg:gap-3">
+              <div className="hidden lg:flex items-center gap-2 lg:gap-3">
                 <ThemeToggle />
                 <WalletButton />
               </div>
@@ -186,11 +189,11 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AppWalletProvider>
-        <VolatilityProvider>
-          <BrowserRouter>
-            <div className="min-h-screen bg-background">
+        <BrowserRouter>
+          <VolatilityProvider>
+            <div className="min-h-screen bg-background relative">
               <Navigation />
-              <main>
+              <main className="relative z-0">
                 <Routes>
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/positions" element={<Positions />} />
@@ -201,8 +204,8 @@ function App() {
                 </Routes>
               </main>
             </div>
-          </BrowserRouter>
-        </VolatilityProvider>
+          </VolatilityProvider>
+        </BrowserRouter>
       </AppWalletProvider>
     </QueryClientProvider>
   );

@@ -1,13 +1,13 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef } from 'react';
 
 // Construct WebSocket URL from current location
 const getWsUrl = () => {
   if (import.meta.env.VITE_WS_URL) {
     return import.meta.env.VITE_WS_URL;
   }
-
+  
   // Use current host for WebSocket connection with /ws path
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const host = window.location.host;
   return `${protocol}//${host}/ws`;
 };
@@ -20,6 +20,14 @@ export interface WebSocketMessage {
   timestamp: number;
 }
 
+export type WebSocketEventType = 
+  | 'position_created'
+  | 'position_updated'
+  | 'position_closed'
+  | 'rebalance_event'
+  | 'alert'
+  | 'auto_rebalance_status';
+
 export function useWebSocket() {
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [connected, setConnected] = useState(false);
@@ -30,60 +38,56 @@ export function useWebSocket() {
   const RECONNECT_DELAY = 3000;
 
   const connect = useCallback(() => {
-    console.log("[WebSocket] Attempting to connect to:", WS_URL);
-
+    console.log('[WebSocket] Attempting to connect to:', WS_URL);
+    
     try {
       const websocket = new WebSocket(WS_URL);
 
       websocket.onopen = () => {
-        console.log("[WebSocket] ✅ Connected successfully");
+        console.log('[WebSocket] ✅ Connected successfully');
         setConnected(true);
         reconnectAttemptsRef.current = 0;
       };
 
       websocket.onclose = (event) => {
-        console.log("[WebSocket] ❌ Disconnected", {
-          code: event.code,
-          reason: event.reason,
-        });
+        console.log('[WebSocket] ❌ Disconnected', { code: event.code, reason: event.reason });
         setConnected(false);
-
+        
         // Attempt to reconnect
         if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
           reconnectAttemptsRef.current++;
-          console.log(
-            `[WebSocket] 🔄 Reconnecting in ${RECONNECT_DELAY}ms (attempt ${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS})`
-          );
+          console.log(`[WebSocket] 🔄 Reconnecting in ${RECONNECT_DELAY}ms (attempt ${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS})`);
           reconnectTimeoutRef.current = setTimeout(() => {
             connect();
           }, RECONNECT_DELAY);
         } else {
-          console.error("[WebSocket] ⛔ Max reconnection attempts reached");
+          console.error('[WebSocket] ⛔ Max reconnection attempts reached');
         }
       };
 
       websocket.onerror = (error) => {
-        console.error("[WebSocket] ⚠️ Error:", error);
+        console.error('[WebSocket] ⚠️ Error:', error);
         setConnected(false);
       };
 
       websocket.onmessage = (event) => {
         try {
           const message: WebSocketMessage = JSON.parse(event.data);
-          console.log(
-            "[WebSocket] 📨 Message received:",
-            message.type,
-            message.data
-          );
+          console.log('[WebSocket] 📨 Message received:', message.type, message.data);
           setLastMessage(message);
+          
+          // Emit custom event for position updates
+          if (['position_created', 'position_updated', 'position_closed', 'rebalance_event'].includes(message.type)) {
+            window.dispatchEvent(new CustomEvent('position-update', { detail: message }));
+          }
         } catch (error) {
-          console.error("[WebSocket] ❌ Failed to parse message:", error);
+          console.error('[WebSocket] ❌ Failed to parse message:', error);
         }
       };
 
       setWs(websocket);
     } catch (error) {
-      console.error("[WebSocket] ❌ Failed to create WebSocket:", error);
+      console.error('[WebSocket] ❌ Failed to create WebSocket:', error);
       setConnected(false);
     }
   }, []);
@@ -92,7 +96,7 @@ export function useWebSocket() {
     connect();
 
     return () => {
-      console.log("[WebSocket] 🧹 Cleaning up connection");
+      console.log('[WebSocket] 🧹 Cleaning up connection');
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
@@ -102,25 +106,22 @@ export function useWebSocket() {
     };
   }, [connect]);
 
-  const send = useCallback(
-    (type: string, data: any) => {
-      if (ws && connected && ws.readyState === WebSocket.OPEN) {
-        console.log("[WebSocket] 📤 Sending message:", type, data);
-        try {
-          ws.send(JSON.stringify({ type, data, timestamp: Date.now() }));
-        } catch (error) {
-          console.error("[WebSocket] ❌ Failed to send message:", error);
-        }
-      } else {
-        console.warn("[WebSocket] ⚠️ Cannot send message - not connected", {
-          hasWs: !!ws,
-          connected,
-          readyState: ws?.readyState,
-        });
+  const send = useCallback((type: string, data: any) => {
+    if (ws && connected && ws.readyState === WebSocket.OPEN) {
+      console.log('[WebSocket] 📤 Sending message:', type, data);
+      try {
+        ws.send(JSON.stringify({ type, data, timestamp: Date.now() }));
+      } catch (error) {
+        console.error('[WebSocket] ❌ Failed to send message:', error);
       }
-    },
-    [ws, connected]
-  );
+    } else {
+      console.warn('[WebSocket] ⚠️ Cannot send message - not connected', { 
+        hasWs: !!ws, 
+        connected, 
+        readyState: ws?.readyState 
+      });
+    }
+  }, [ws, connected]);
 
   return { connected, lastMessage, send };
 }
