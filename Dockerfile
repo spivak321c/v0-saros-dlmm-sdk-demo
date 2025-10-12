@@ -1,31 +1,25 @@
-# Use full Node 20 (Debian base—no Alpine gyp issues)
-FROM node:22
+FROM node:20
 
-# Set working dir (full monorepo at root)
 WORKDIR /app
 
-# Copy package files for caching
+# Copy packages
 COPY package*.json ./
 COPY server/package*.json ./server/
 
-# Install root deps (client/shared)
+# Install deps (normal, no ci)
 RUN npm install
-
-# Install server deps
 RUN cd server && npm install
 
-# Copy source
+# Copy code
 COPY . .
 
-# Build server
-RUN cd server && npm run build
+# Build with check (fails if no dist/index.js)
+RUN cd server && npm run build && ls -la dist/index.js || (echo "Build failed: No dist/index.js" && exit 1)
 
-# Prune dev deps (slim runtime)
+# Prune dev
 RUN npm prune --production
 RUN cd server && npm prune --production
 
-# Expose port
 EXPOSE 3000
 
-# Run from server
 CMD ["sh", "-c", "cd server && npm start"]
