@@ -1,5 +1,8 @@
 # Use Node 20 (matches your deps like @types/node@20.x)
-FROM node:24-alpine
+FROM node:22-alpine
+
+# Install build tools for native deps (gyp/node-gyp fixes)
+RUN apk add --no-cache python3 make g++
 
 # Set working dir inside container (full monorepo at root)
 WORKDIR /app
@@ -24,6 +27,9 @@ RUN cd server && npm run build
 RUN npm ci --only=production --prefix . && \
     cd server && npm ci --only=production && \
     npm cache clean --force
+
+# Remove build tools (slim image)
+RUN apk del python3 make g++
 
 # Expose port (Railway uses $PORT env var)
 EXPOSE 3000
