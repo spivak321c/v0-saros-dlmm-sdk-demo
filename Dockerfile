@@ -3,41 +3,39 @@
 
     WORKDIR /app
     
-    # Copy package files (root + server)
+    # Copy package files
     COPY package*.json ./
     COPY server/package*.json ./server/
     
-    # Install root dependencies first (needed for shared)
+    # Install root deps (shared dependencies)
     RUN npm install
     
-    # Install server-specific dependencies
+    # Install server deps
     RUN cd server && npm install
     
-    # Copy source code (server + shared only)
+    # Copy relevant source files
     COPY server ./server
     COPY shared ./shared
     
-    # Build the server (outputs to /app/server/dist)
-    RUN cd server && npm run build
+    # Build and verify output
+    RUN cd server && npm run build && \
+        echo "Build contents:" && ls -la dist || \
+        (echo "❌ Build failed or dist not found" && exit 1)
     
-    # ---- Production stage ----
+    # ---- Runtime stage ----
     FROM node:20-slim AS runner
     
     WORKDIR /app/server
     
-    # Copy compiled server and package files
     COPY --from=builder /app/server/dist ./dist
     COPY server/package*.json ./
-    
-    # Copy shared folder (if server runtime imports from it)
     COPY --from=builder /app/shared ./../shared
     
-    # Install only production dependencies
     RUN npm install --omit=dev
     
-    # Port provided by Sevalla or fallback to 3000
     ENV PORT=3000
     EXPOSE ${PORT}
     
-    CMD ["node", "dist/index.js"]
+    # Add check to confirm dist exists before start
+    CMD [ "sh", "-c", "ls -la dist || (echo '❌ dist missing'; exit 1); node dist/index.js" ]
     
