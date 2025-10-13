@@ -61,7 +61,7 @@ function Navigation() {
                 <Activity className="w-5 h-5 lg:w-6 lg:h-6 text-primary-foreground" />
               </div>
               <div className="hidden sm:block">
-                <h1 className="text-lg lg:text-xl font-bold">LiquiFlow</h1>
+                <h1 className="text-lg lg:text-xl font-bold">LiquidFlow</h1>
                 <p className="text-xs lg:text-sm text-muted-foreground -mt-0.5">
                   DLMM Manager
                 </p>
